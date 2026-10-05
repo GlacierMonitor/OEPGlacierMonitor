@@ -1,0 +1,12 @@
+{
+  "2016": {"date": "2016-10-30", "notes": "reviewed by eye; SCL cloud unreliable pre-2022 (snow/debris flagged as cloud)"},
+  "2017": {"date": "2017-10-15", "notes": "reviewed by eye; SCL cloud unreliable pre-2022"},
+  "2018": {"date": "2018-10-20", "notes": "reviewed by eye; 10-05 had fresh snow on valley floors + cloud E"},
+  "2019": {"date": "2019-10-15", "notes": "reviewed by eye; 10-25 heavily clouded, 10-05 fresh snow"},
+  "2020": {"date": "2020-10-09", "notes": "reviewed by eye; SCL cloud unreliable pre-2022"},
+  "2021": {"date": "2021-10-14", "notes": "reviewed by eye; small cloud patches"},
+  "2022": {"date": "2022-10-24", "notes": ""},
+  "2023": {"date": "2023-10-09", "notes": "10-29 has scene-wide haze missed by SCL"},
+  "2024": {"date": "2024-11-17", "notes": "November: Oct dates had fresh snow on debris tongues"},
+  "2025": {"date": "2025-11-22", "notes": "heavy snow all season (SCL snow 64-87%); least-bad date"}
+}

@@ -1,0 +1,7 @@
+# Python environment and caches
+venv/
+__pycache__/
+*.pyc
+
+# Downloaded / generated data (large; regenerate with search.py and export.py)
+GlacierMonitor/
