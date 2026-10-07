@@ -55,6 +55,21 @@ venv\Scripts\python predict.py --model runs\dummy\best.pt --dem dummy\CopDEM_GLO
 `predict.py` writes `<scene>_prob.tif`, `<scene>_mask.tif` and `areas.csv` (glacier km² per year). If
 `--label` is given, it also reports test-tile IoU for both the U-Net and the NDSI > 0.4 baseline.
 
+## Per-glacier areas
+
+```
+venv\Scripts\python glacier_areas.py --masks runs\dummy\pred\S2_*_mask.tif --glaciers dummy\glacier_ids.tif ^
+    --lookup dummy\glacier_ids.csv --method unet --results results.csv
+```
+
+This needs a glacier-ID raster on the same 10 m grid (one integer per glacier, 0 elsewhere) plus a lookup CSV
+with columns `value, glacier_id, glacier_name`. It writes area per glacier per year to the shared
+`results.csv` (`glacier_id, glacier_name, year, preprocessing, method, area_km2`). Year and preprocessing
+come from the file name: `S2_` files are A and `S2GEE_` files are B. Rows for the same glacier, year,
+preprocessing and method are replaced, and all other rows are kept. If more than 5 % of a glacier has no
+data (`--max-nodata`), its area is left empty instead of being undercounted. `make_dummy.py` also writes a
+dummy `glacier_ids.tif` and `glacier_ids.csv` (one outline per connected glacier).
+
 ## Notes
 - SCL cloud masking is **off** by default (`--mask-cloud` turns it on), because SCL marks snow and debris
   as cloud before 2022 (see `decisions.md`). Cloud gap-filling belongs to Part 2.
