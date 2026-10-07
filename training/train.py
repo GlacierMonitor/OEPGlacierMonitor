@@ -55,8 +55,8 @@ def main():
     print(f"device {device}{' ' + torch.cuda.get_device_name(0) if device.type == 'cuda' else ''}, "
           f"mixed precision {amp_dtype}")
 
-    x, valid, _ = load_stack(args.s2, args.dem, args.mask_cloud)
-    y = read_label(args.label, valid)
+    x, valid, profile = load_stack(args.s2, args.dem, args.mask_cloud)
+    y = read_label(args.label, valid, profile)
     tiles = read_tiles(args.tiles, valid.shape)
     train_t, val_t = tiles[tiles.split == "train"], tiles[tiles.split == "val"]
     if len(train_t) == 0 or len(val_t) == 0:

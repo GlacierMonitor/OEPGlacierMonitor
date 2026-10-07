@@ -96,7 +96,7 @@ def main():
         print(f"{stem}: glacier {area:.2f} km2, no data {nodata_pct:.1f}%")
 
         if args.label:
-            y = read_label(args.label, valid)
+            y = read_label(args.label, valid, profile)
             region = np.zeros_like(valid)
             if args.tiles:
                 t = read_tiles(args.tiles, valid.shape)

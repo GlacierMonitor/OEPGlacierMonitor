@@ -77,11 +77,14 @@ def load_stack(s2_path, dem_path, mask_cloud=False):
     return x, valid, profile
 
 
-def read_label(path, valid):
+def read_label(path, valid, profile):
     with rasterio.open(path) as src:
         y = src.read(1).astype("uint8")
+        same = src.crs == profile["crs"] and src.transform.almost_equals(profile["transform"])
     if y.shape != valid.shape:
         raise ValueError(f"label {y.shape} does not match image grid {valid.shape}")
+    if not same:
+        raise ValueError(f"{path} is not on the same grid as the image (CRS or transform differs)")
     y[~valid] = IGNORE
     return y
 
@@ -95,6 +98,12 @@ def read_tiles(path, shape):
     bad = (tiles.row < 0) | (tiles.col < 0) | (tiles.row + TILE > h) | (tiles.col + TILE > w)
     if bad.any():
         raise ValueError(f"{bad.sum()} tiles fall outside the {h}x{w} image")
+    tr = tiles[tiles.split == "train"][["row", "col"]].to_numpy()
+    ot = tiles[tiles.split != "train"][["row", "col"]].to_numpy()
+    if len(tr) and len(ot):
+        d = np.abs(tr[:, None, :] - ot[None, :, :])
+        if (d < TILE).all(2).any():
+            raise ValueError(f"{path}: train tiles overlap val/test tiles")
     return tiles
 
 
