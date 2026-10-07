@@ -55,6 +55,19 @@ venv\Scripts\python predict.py --model runs\dummy\best.pt --dem dummy\CopDEM_GLO
 `predict.py` writes `<scene>_prob.tif`, `<scene>_mask.tif` and `areas.csv` (glacier km² per year). If
 `--label` is given, it also reports test-tile IoU for both the U-Net and the NDSI > 0.4 baseline.
 
+## Random Forest baseline
+
+```
+venv\Scripts\python rf_baseline.py --s2 dummy\S2_20991024.tif --dem dummy\CopDEM_GLO30_UTM45N.tif ^
+    --label dummy\label_2099.tif --tiles dummy\tiles.csv --out runs\rf_dummy --predict dummy\S2_*.tif
+```
+
+This is a per-pixel scikit-learn `RandomForestClassifier` on the same 9 inputs as the U-Net. It samples up to
+50 000 labelled pixels per class (`--samples`) from the train tiles only, then maps the reference scene and
+any `--predict` scenes. It prints val/test IoU next to the NDSI > 0.4 baseline, plus the importance of each
+input. It writes `rf.joblib`, `scores.json` and `<scene>_prob.tif` / `<scene>_mask.tif` in the same format as
+`predict.py`. On the full 3220 × 3940 grid, fitting takes about 2 s and mapping one scene about 12 s on the laptop CPU.
+
 ## Notes
 - SCL cloud masking is **off** by default (`--mask-cloud` turns it on), because SCL marks snow and debris
   as cloud before 2022 (see `decisions.md`). Cloud gap-filling belongs to Part 2.
