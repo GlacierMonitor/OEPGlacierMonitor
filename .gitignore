@@ -5,3 +5,8 @@ __pycache__/
 
 # Downloaded / generated data (large; regenerate with search.py and export.py)
 GlacierMonitor/
+
+# Part 4 training outputs (venv, dummy data, model weights, predictions)
+training/venv/
+training/runs/
+training/dummy*/

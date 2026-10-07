@@ -1,0 +1,9 @@
+# Part 4 training environment (tested on RTX 4050 laptop, Python 3.14)
+# install torch first: pip install torch==2.14.1 torchvision==0.29.1 --index-url https://download.pytorch.org/whl/cu130
+torch==2.14.1
+torchvision==0.29.1
+segmentation-models-pytorch==0.5.0
+timm==1.0.30
+numpy==2.5.1
+pandas==3.0.3
+rasterio==1.5.2
