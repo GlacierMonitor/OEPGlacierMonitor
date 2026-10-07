@@ -56,10 +56,10 @@ venv\Scripts\python predict.py --model runs\dummy\best.pt --dem dummy\CopDEM_GLO
 `--label` is given, it also reports test-tile IoU for both the U-Net and the NDSI > 0.4 baseline.
 
 ## Notes
+- SCL cloud masking is **off** by default (`--mask-cloud` turns it on), because SCL marks snow and debris
+  as cloud before 2022 (see `decisions.md`). Cloud gap-filling belongs to Part 2.
 - Approach B files (`S2GEE_YYYY.tif`, Earth Engine composites) have only the 6 bands and no SCL. They load
   as they are: Cloud Score+ already masked cloud in Earth Engine, so the SCL steps (and `--mask-cloud`) are
   skipped for them. The bands must be in the order B02, B03, B04, B08, B11, B12, either named that way or unnamed.
-- SCL cloud masking is **off** by default (`--mask-cloud` turns it on), because SCL marks snow and debris
-  as cloud before 2022 (see `decisions.md`). Cloud gap-filling belongs to Part 2.
 - Areas count every pixel classed as glacier, so lakes and seasonal snow are included if the model labels them glacier.
   The ± half-pixel error margin is added in the results step.
