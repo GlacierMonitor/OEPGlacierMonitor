@@ -2,6 +2,7 @@
 
 Inputs come straight from Part 1's export.py:
   - S2_YYYYMMDD.tif : 7-band uint16 (B02, B03, B04, B08, B11, B12, SCL), nodata 0, 10 m, EPSG:32645
+  - S2GEE_YYYY.tif : Earth Engine composite (approach B), the same 6 bands without SCL, same grid
   - CopDEM_GLO30_UTM45N.tif : float32 elevation, nodata -32767, 30 m grid of the same area
 
 Labels and tiles (Part 3) are expected as:
@@ -10,6 +11,7 @@ Labels and tiles (Part 3) are expected as:
     row/col are the pixel offsets of each tile's top-left corner, tile size = TILE
 """
 import json
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -36,19 +38,26 @@ def load_stack(s2_path, dem_path, mask_cloud=False):
 
     x is (9, H, W) float32 in CHANNELS order: reflectance 0-1, NDSI, elevation (m), slope (deg).
     valid is (H, W) bool: pixels with data (and, if mask_cloud, not SCL cloud/shadow).
+    Files without SCL (S2GEE_ composites, cloud already masked in Earth Engine) skip the SCL steps.
     """
     with rasterio.open(s2_path) as src:
         s2 = src.read()
         profile = src.profile
         names = list(src.descriptions)
-    if names[:7] != S2_BANDS + ["SCL"]:
+    gee = Path(s2_path).name.startswith("S2GEE_")
+    if names[:7] == S2_BANDS + ["SCL"]:
+        scl = s2[6]
+    elif gee and len(names) == 6 and names in (S2_BANDS, [None] * 6):
+        scl = None                   # unnamed bands are taken to be in S2_BANDS order
+    else:
         raise ValueError(f"{s2_path}: unexpected bands {names}")
 
     refl = s2[:6].astype("float32") / 10000.0
-    scl = s2[6]
-    valid = (s2[:6] > 0).all(0) & ~np.isin(scl, SCL_BAD)
-    if mask_cloud:
-        valid &= ~np.isin(scl, SCL_CLOUD)
+    valid = (s2[:6] > 0).all(0)
+    if scl is not None:
+        valid &= ~np.isin(scl, SCL_BAD)
+        if mask_cloud:
+            valid &= ~np.isin(scl, SCL_CLOUD)
 
     green, swir = refl[1], refl[4]
     ndsi = np.where(green + swir > 0, (green - swir) / (green + swir + 1e-6), 0).astype("float32")
