@@ -46,7 +46,7 @@ Open items still need a decision from the team (see bottom).
 
 ### 7. Landsat valid-pixel test hardened
 - Valid = fill bit 0 not set **and** qa_pixel ≠ 0, so that areas outside a scene's footprint can
-  never count as valid. Cloud = bit 3 (cloud) or bit 4 (cloud shadow), as specified.
+  never count as valid. Cloud = bit 3 only (see 13; bit 4 is logged but not used).
 - The chosen Landsat scene per year is logged to `landsat_thermal/landsat_log.csv`.
 
 ### 8. Picks are confirmed through a file
@@ -96,12 +96,20 @@ Open items still need a decision from the team (see bottom).
   with a heavy early-October snowfall. Whichever 2025 date is picked, it will probably
   show more snow than other years, so note it in `scene_log.csv`.
 
+### 11. Cloud rule for 2016–2021: rank by `cloud_ndsi_%`, pick by eye (settled 2026-10-07)
+- Option (a) from the former open list. Every pre-2022 date in `chosen_dates.json` was chosen by eye
+  from the SWIR previews.
+
+### 12. Final ten dates confirmed (settled 2026-10-07)
+- 2022 = **2022-10-24** (the reviewed pick; replaces 10-29, which had been exported earlier).
+- 2025 = **2025-11-22** is added (it was skipped before). It is the least-bad date in a heavy-snow season.
+
+### 13. Landsat cloud rule: bit 3 only (settled 2026-10-07)
+- The specified bits 3 + 4 rule rejected every year: bit 4 "cloud shadow" flags 26–39% of the AOI,
+  which is mostly topographic shadow in this terrain. USGS scene cloud is only 2–20%.
+- `cloud_%` now uses bit 3 only. The 30% maximum is unchanged, and `shadow_bit4_%` is still logged
+  in `landsat_log.csv`.
+
 ## Open – needs a team decision
-1. **Cloud rule for 2016–2021.** Options:
-   - (a) Rank by `cloud_ndsi_%` with no cut-off, and choose each year's date **by eye** from the
-     previews (recommended).
-   - (b) Keep the SCL rule and accept no candidates for 2016–2021 (not workable).
-   - (c) Bring in a separate cloud mask (e.g. s2cloudless). This is more work and isn't on Planetary
-     Computer.
-2. **Fresh-snow judgement for 2016–2021** must come from the SWIR previews, not from `snow_%_hint`.
-3. **Final pick per year**. Nothing is exported until `chosen_dates.json` is confirmed.
+1. **Fresh-snow judgement for each year** (Snehi, scene log). For 2016–2021 it has to come from the
+   SWIR previews, not from `snow_%_hint`.

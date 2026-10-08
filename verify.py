@@ -26,14 +26,27 @@ def check_file(path, res, bands):
     return problems, grid, desc
 
 
-def reflectance_stats(path):
-    """Median and 5-95th percentile of valid, clear, non-snow B02-B12 pixels."""
+def read_small(path):
     with rasterio.open(path) as src:
-        a = src.read(out_shape=(src.count, src.height // 4, src.width // 4))   # 40 m overview is enough
-    scl = a[6]
-    clear = np.isin(scl, [4, 5])                         # vegetation, not-vegetated (rock/debris)
-    return {b: np.percentile(a[i][clear & (a[i] > 0)], [5, 50, 95]).round().astype(int).tolist()
-            for i, b in enumerate(C.S2_BANDS)}
+        return src.read(out_shape=(src.count, src.height // 4, src.width // 4))   # 40 m is enough
+
+
+def compare_offset(old_path, new_path):
+    """Median reflectance on pixels that are clear (SCL 4/5) in BOTH images.
+
+    Using the same pixels avoids comparing different surfaces. If the +1000
+    offset was not removed from the newer image, the difference is ~+1000.
+    """
+    a, b = read_small(old_path), read_small(new_path)
+    m = np.isin(a[6], [4, 5]) & np.isin(b[6], [4, 5]) & (a[0] > 0) & (b[0] > 0)
+    print(f"  {m.sum()} pixels clear in both {old_path.name} and {new_path.name}")
+    ok = True
+    for i, band in enumerate(C.S2_BANDS):
+        oa, nb = int(np.median(a[i][m])), int(np.median(b[i][m]))
+        diff = int(np.median(b[i][m].astype(int) - a[i][m].astype(int)))
+        ok &= abs(diff) < 300
+        print(f"  {band}: {oa:5d} vs {nb:5d}  median diff {diff:+d}")
+    return ok
 
 
 def main():
@@ -55,12 +68,13 @@ def main():
                     print("   ", g, names)
 
     s2 = {f.stem[3:7]: f for f in sorted(C.S2_DIR.glob("S2_*.tif"))}
-    print("\nReflectance (5th / median / 95th pct, clear non-snow pixels) - pre vs post 2022 baseline:")
-    for yr in ("2020", "2023"):
-        if yr in s2:
-            print(f"  {s2[yr].name}: {reflectance_stats(s2[yr])}")
-        else:
-            print(f"  {yr}: no file")
+    print("\nOffset check - 2020 (baseline < 04.00) vs 2023 (baseline >= 04.00):")
+    if "2020" in s2 and "2023" in s2:
+        same = compare_offset(s2["2020"], s2["2023"])
+        ok &= same
+        print(f"-> reflectance in a similar range (|diff| < 300 DN): {same}")
+    else:
+        print("  2020 or 2023 file missing - skipped")
 
     total = sum(f.stat().st_size for f in C.OUT.rglob("*") if f.is_file())
     print(f"\nDisk use of {C.OUT}: {total / 1e6:.1f} MB")

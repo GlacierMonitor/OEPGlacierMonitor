@@ -1,5 +1,75 @@
 # GlacierMonitor Part 1 – Progress updates
 
+## 2026-10-07 – export complete
+
+### Decisions (details in `decisions.md` 11–13)
+- **2022 = 2022-10-24** (was 10-29). The old `S2_20221029.tif` was removed from `raw/`.
+- **2025 added = 2025-11-22**. It overrides the skip of 2026-10-05, at the team's request; heavy
+  snow all season, so it is the least-bad date.
+- **Landsat cloud rule = QA bit 3 only.** Bit 4 is mostly topographic shadow here; it is still logged.
+
+### Exported (`GlacierMonitor/raw/`)
+- `sentinel2/`: 10 files: S2_20161030, S2_20171015, S2_20181020, S2_20191015, S2_20201009,
+  S2_20211014, **S2_20221024**, S2_20231009, S2_20241117, S2_20251122.
+- `dem/CopDEM_GLO30_UTM45N.tif` (from 2026-10-05).
+- `landsat_thermal/`: 10 LST files (2016-11-19, 2017-10-21, 2018-11-09, 2019-11-12, 2020-10-29,
+  2021-11-17, 2022-10-27, 2023-10-06, 2024-11-01, 2025-10-11), with AOI cloud 3.6–23.0%, plus `landsat_log.csv`.
+  2022-10-19 was unreadable on Planetary Computer, so 2022-10-27 was used instead.
+- `scene_log.csv` (the fresh_snow column is still empty and goes to Snehi).
+
+### Checks
+- `verify.py`: **ALL CHECKS PASSED**. All 10 S2 files are 3940 × 3220 on an identical grid with 7 bands,
+  and the offset check 2020 vs 2023 gives median diffs within ±51 DN.
+
+### Reference year
+- **2022, file `S2_20221024.tif`** (labels are drawn on this scene).
+
+### Still to do
+- ~~False-colour check~~ done 2026-10-08 in Python (QGIS would not install): 2020 vs 2022 aligned (edges match at Imja, Gokyo, Khumbu), no cloud on main glaciers. Images: `previews/check_*_2020_vs_2022.png`. Minor: thin tile seam on the S shore of Imja Tsho in 2020.
+- Upload `GlacierMonitor/raw/` to Drive and update the image-selection sheet (2022 → 10-24, 2025 row).
+- Hand off: Siddhi gets `S2_20221024.tif` for alignment, Snehi gets `scene_log.csv`, and Kavya gets the reference file name.
+
+## 2026-10-05 (paused)
+
+### Done
+- **Picks confirmed** (`chosen_dates.json`). Same as suggested, except **2022 = 2022-10-29**.
+  **2025 skipped**: no suitable date, and 2025-11-22 is too snow-covered for glacier area.
+- **Sentinel-2 exported** for 2016–2024 (9 files, `GlacierMonitor/raw/sentinel2/S2_YYYYMMDD.tif`).
+- **DEM exported**: `dem/CopDEM_GLO30_UTM45N.tif`, elevation 3272–8737 m. The minimum is the Dudh Koshi
+  valley at the south edge, and the maximum is a slightly blunted Everest summit at 30 m.
+- **Checks (`verify.py`) passed** for S2 and DEM: EPSG:32645, 10 m / 30 m, all 9 S2 files on the
+  same 3940 × 3220 grid, 7 bands with names. **Offset fix confirmed**: on pixels clear in both 2020
+  and 2023, the band medians differ by only −51 to +30 DN (≈ +1000 if the fix had failed).
+- **Scripts pushed** to https://github.com/GlacierMonitor/OEPGlacierMonitor (`main`, first commit).
+  Later fixes (export retries/resume, Landsat mosaic fix, new offset check) are **not pushed yet**.
+- Disk use so far: about 982 MB.
+
+### Landsat thermal – not finished, needs a decision
+- **Bug fixed:** odc-stac filled the area outside WRS row 040 with 0, which overwrote row 041 and
+  made every year look like <90% coverage. Scenes are now mosaicked one by one, and coverage is 100%.
+- **Specified cloud rule (QA bits 3 + 4) rejects every year checked so far (2016–2021)**: 39–62% cloud +
+  shadow, while the USGS scene estimate is 2–20%. Most of it is **bit 4 "cloud shadow"** (26–39%),
+  which is really topographic shadow in steep terrain with a low autumn sun, plus some snow flagged as cloud.
+
+  | Year | Clearest date | Bits 3+4 % | Cloud (bit 3) % | Shadow (bit 4) % | USGS scene % |
+  |---|---|---|---|---|---|
+  | 2016 | 2016-10-18 | 56.7 | 20.7 | 36.0 | 8.9 |
+  | 2017 | 2017-10-21 | 38.6 | 12.5 | 26.1 | 19.8 |
+  | 2018 | 2018-11-09 | 54.4 | 20.2 | 34.2 | 2.3 |
+  | 2019 | 2019-10-27 | 55.2 | 25.1 | 30.2 | 11.4 |
+  | 2020 | 2020-10-29 | 56.7 | 21.3 | 35.4 | 2.4 |
+  | 2021 | 2021-11-17 | 61.8 | 23.0 | 38.7 | 4.1 |
+
+- **2022:** the file `LC08_L2SP_140041_20221019` returns HTTP 403 on Planetary Computer (row 040
+  of the same date opens fine). `export.py` now skips unreadable dates instead of crashing.
+- **Open decision:** keep the rule (no LST files at all), or drop bit 4 / use another threshold.
+
+### To resume
+1. Decide the Landsat cloud rule.
+2. `venv\Scripts\python export.py landsat log`: S2 and DEM are skipped because they already exist.
+3. `venv\Scripts\python verify.py`
+4. Commit and push the script fixes. Fill the Google Sheet from `GlacierMonitor/raw/scene_log.csv`.
+
 ## 2026-09-27
 
 ### Done

@@ -101,21 +101,57 @@ def run_dem(catalog, overwrite=False):
 
 
 # --- Step 6: Landsat LST ---------------------------------------------------
+def qa_valid(q):
+    return ((q & 1) == 0) & (q != 0)                                     # bit 0 = fill; 0 = outside scene
+
+
+def ls_mosaic(items, band, gbox, valid):
+    """Mosaic one date's scenes (e.g. WRS rows 040 + 041), first valid pixel wins.
+
+    odc-stac's own groupby fills the area outside a scene's footprint with 0,
+    which is not qa_pixel's nodata (1), so one row's empty area would overwrite
+    the other row's data. Loading each scene separately avoids that.
+    """
+    out = None
+    for it in items:
+        a = getattr(load([it], bands=[band], geobox=gbox), band).values[0]
+        out = a if out is None else np.where(valid(out), out, a)
+    return out
+
+
+def by_date(items):
+    groups = {}
+    for it in items:
+        groups.setdefault(it.datetime.date().isoformat(), []).append(it)
+    return dict(sorted(groups.items()))
+
+
 def ls_candidates(catalog, year):
     items = C.search(catalog, "landsat-c2-l2", *C.season(year), query=LS_PLATFORMS)
     if len(items) == 0:
         return pd.DataFrame()
     gbox = C.geobox(90)
     inside = C.aoi_mask(gbox)
-    qa = load(items, bands=["qa_pixel"], geobox=gbox, groupby="solar_day").qa_pixel
     rows = []
-    for t, q in zip(qa.time.values, qa.values.astype("uint16")):
-        valid = ((q & 1) == 0) & (q != 0) & inside                       # bit 0 = fill
+    for date, group in by_date(items).items():
+        try:
+            q = C.retry(ls_mosaic, group, "qa_pixel", gbox, qa_valid).astype("uint16")
+        except Exception as e:      # e.g. a file that is missing on Planetary Computer
+            print(f"   {date}: unreadable, skipped ({type(e).__name__})")
+            continue
+        valid = qa_valid(q) & inside
         nv = valid.sum()
         if nv == 0:
             continue
-        cloud = ((((q >> 3) & 1) | ((q >> 4) & 1)) == 1) & valid         # bit 3 cloud, 4 shadow
-        rows.append({"date": str(t)[:10], "cloud_%": round(100 * cloud.sum() / nv, 1),
+        cloud = (((q >> 3) & 1) == 1) & valid                            # bit 3 cloud
+        shadow = (((q >> 4) & 1) == 1) & valid                           # bit 4 cloud shadow
+        # Rule uses bit 3 only: bit 4 flags topographic shadow here (decisions.md), so it is logged, not used.
+        rows.append({"date": date, "cloud_%": round(100 * cloud.sum() / nv, 1),
+                     "cloud_bit3_%": round(100 * cloud.sum() / nv, 1),
+                     "shadow_bit4_%": round(100 * shadow.sum() / nv, 1),
+                     # USGS whole-scene estimate, for comparison only
+                     "scene_cloud_%": round(float(np.mean([it.properties.get("eo:cloud_cover", np.nan)
+                                                           for it in group])), 1),
                      "cover_%": round(100 * nv / inside.sum(), 1)})
     df = pd.DataFrame(rows)
     return df[df["cover_%"] > LS_MIN_COVER].sort_values("cloud_%") if len(df) else df
@@ -126,7 +162,7 @@ def export_lst(catalog, date, overwrite=False):
     path = C.LST_DIR / f"LST_{date.replace('-', '')}.tif"
     if overwrite or not path.exists():
         gbox = C.geobox(30)
-        dn = load(items, bands=["lwir11"], geobox=gbox, groupby="solar_day").lwir11.isel(time=0).values
+        dn = ls_mosaic(items, "lwir11", gbox, lambda a: a > 0)
         kelvin = np.where(dn > 0, dn * LST_SCALE + LST_OFFSET, np.nan).astype("float32")
         write_tif(path, kelvin, gbox, nodata=np.nan, names=["LST_kelvin"])
     return path, sorted(it.id for it in items)
@@ -135,22 +171,24 @@ def export_lst(catalog, date, overwrite=False):
 def run_landsat(catalog, years, overwrite=False):
     rows = []
     for y in years:
-        df = C.retry(ls_candidates, catalog, y)
+        df = ls_candidates(catalog, y)
         if df.empty:
             print(f"LST {y}: no Landsat 8/9 scene with >{LS_MIN_COVER}% coverage - skipped")
             rows.append({"year": y, "status": "no scene"})
             continue
         best = df.iloc[0]
+        info = {"year": y, "date": best.date, "cloud_%_aoi": best["cloud_%"],
+                "cloud_bit3_%": best["cloud_bit3_%"], "shadow_bit4_%": best["shadow_bit4_%"],
+                "scene_cloud_%": best["scene_cloud_%"], "cover_%": best["cover_%"]}
+        detail = (f"cloud {best['cloud_%']}% (shadow bit 4, not used: {best['shadow_bit4_%']}%; "
+                  f"USGS scene {best['scene_cloud_%']}%)")
         if best["cloud_%"] > LS_MAX_CLOUD:
-            print(f"LST {y}: clearest {best.date} has {best['cloud_%']}% cloud - skipped")
-            rows.append({"year": y, "date": best.date, "cloud_%_aoi": best["cloud_%"],
-                         "status": "too cloudy"})
+            print(f"LST {y}: clearest {best.date} has {detail} - skipped")
+            rows.append({**info, "status": "too cloudy"})
             continue
         path, ids = C.retry(export_lst, catalog, best.date, overwrite)
-        print(f"LST {y}: {best.date} cloud {best['cloud_%']}% -> {path.name}")
-        rows.append({"year": y, "date": best.date, "cloud_%_aoi": best["cloud_%"],
-                     "cover_%": best["cover_%"], "scene_ids": "; ".join(ids),
-                     "status": "ok", "file": path.name})
+        print(f"LST {y}: {best.date} {detail} -> {path.name}")
+        rows.append({**info, "scene_ids": "; ".join(ids), "status": "ok", "file": path.name})
     pd.DataFrame(rows).to_csv(C.LST_DIR / "landsat_log.csv", index=False)
     return rows
 
