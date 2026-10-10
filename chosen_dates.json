@@ -5,7 +5,8 @@
   "2019": {"date": "2019-10-15", "notes": "picked by eye; 10-25 clouded, 10-05 fresh snow"},
   "2020": {"date": "2020-10-09", "notes": "picked by eye; SCL cloud unreliable pre-2022"},
   "2021": {"date": "2021-10-14", "notes": "picked by eye; small cloud patches"},
-  "2022": {"date": "2022-10-29", "notes": "team pick"},
+  "2022": {"date": "2022-10-24", "notes": "team pick (settled 2026-10-07)"},
   "2023": {"date": "2023-10-09", "notes": "10-29 has scene-wide haze missed by SCL"},
-  "2024": {"date": "2024-11-17", "notes": "November; Oct dates had fresh snow on debris tongues (alt: 2024-10-28)"}
+  "2024": {"date": "2024-11-17", "notes": "November; Oct dates had fresh snow on debris tongues (alt: 2024-10-28)"},
+  "2025": {"date": "2025-11-22", "notes": "heavy snow all season; least-bad date"}
 }
