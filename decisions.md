@@ -110,6 +110,29 @@ Open items still need a decision from the team (see bottom).
 - `cloud_%` now uses bit 3 only. The 30% maximum is unchanged, and `shadow_bit4_%` is still logged
   in `landsat_log.csv`.
 
+## Part 2 – masks (approach A)
+
+### 14. Cloud and cloud shadow from OmniCloudMask; SCL is only a second opinion (2026-10-10)
+- `masks.py` runs OmniCloudMask (v1.7.1, pretrained, works on L2A) on B04, B03 and B08 for each scene.
+  Thick + thin cloud become cloud (1) and its shadow class becomes cloud shadow (2).
+- **Why:** SCL is unusable before 2022. On 2021-10-14 it calls 32% of the scene cloud (14% even after
+  the NDSI snow correction), mostly snow and debris tongues. OmniCloudMask finds 2.6%, which matches
+  the clouds visible by eye. One method for all 10 years keeps the years comparable.
+- SCL + NDSI correction is kept as a **second opinion** in `compare_YYYYMMDD.tif`
+  (1 OCM only, 2 SCL only, 3 both). Disagreements show where to look by eye; SCL does not change the mask.
+- Each year is reviewed by eye; wrong areas get fixed by hand.
+
+### 15. Terrain shadow is flagged, not removed (2026-10-10)
+- Class 3 = slope facing away from the sun, or sun blocked by higher ground (ray march up to 10 km on
+  the 30 m DEM), using each scene's mean sun zenith and azimuth from the STAC metadata.
+- **Why flagged:** shadowed ice is still glacier. The flag lets errors in shadow be analysed separately.
+- Checked on 2021: within each 500 m elevation band, shadow pixels are 30–55% darker in B08 than sunlit ones.
+
+### 16. Mask file format
+- `GlacierMonitor/masks/mask_YYYYMMDD.tif`: uint8 on the 10 m grid; 0 clear, 1 cloud, 2 cloud shadow,
+  3 terrain shadow, 255 no data. Where classes overlap, cloud wins over cloud shadow, which wins over terrain shadow.
+
+
 ## Open – needs a team decision
 1. **Fresh-snow judgement for each year** (Snehi, scene log). For 2016–2021 it has to come from the
    SWIR previews, not from `snow_%_hint`.
