@@ -26,8 +26,18 @@
 
 ### Still to do
 - ~~False-colour check~~ done 2026-10-08 in Python (QGIS would not install): 2020 vs 2022 aligned (edges match at Imja, Gokyo, Khumbu), no cloud on main glaciers. Images: `previews/check_*_2020_vs_2022.png`. Minor: thin tile seam on the S shore of Imja Tsho in 2020.
-- Upload `GlacierMonitor/raw/` to Drive and update the image-selection sheet (2022 → 10-24, 2025 row).
+- ~~Upload to Drive~~ done 2026-10-08 (`raw/` in the team folder: 10 S2, DEM, 10 LST, scene_log). Image-selection sheet updated 2026-10-08 (2022 → 10-24, 2025 row filled).
 - Hand off: Siddhi gets `S2_20221024.tif` for alignment, Snehi gets `scene_log.csv`, and Kavya gets the reference file name.
+
+### 2026-10-08 – 10
+- PR #6 merged into `main` by Kavya on 2026-10-10.
+- Siddhi's `S2GEE_2022.tif` checked against `S2_20221024.tif`. It has the same grid with a 0 px shift, no holes, and a median NDSI on ice of 0.89.
+  It has 20 bands instead of 6, though, so a re-export with only B02–B12 has been requested.
+- Reviewed Kavya's Siamese plan.
+  - Fix needed: if only `|difference|` reaches the decoder, the model cannot tell loss from gain, so use the signed difference.
+  - Fix needed: start the encoder from the 7-input `--no-terrain` U-Net, because the 9-input U-Net weights won't load.
+  - Labels: draw the early-year label by editing a copy of the 2022 label.
+  - Proposed early year: 2016 (`S2_20161030.tif`), pending Snehi's fresh-snow notes.
 
 ## 2026-10-05 (paused)
 
