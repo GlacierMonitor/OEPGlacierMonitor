@@ -2,9 +2,12 @@ matplotlib==3.11.2
 numpy==2.5.3
 odc-geo==0.5.3
 odc-stac==0.5.3
+omnicloudmask==1.7.1
 pandas==3.0.6
 planetary-computer==1.0.0
 pystac-client==0.9.0
 rasterio==1.5.1
 rioxarray==0.23.0
+torch==2.14.1
 xarray==2026.7.0
+# CPU build: pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu

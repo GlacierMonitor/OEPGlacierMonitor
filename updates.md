@@ -1,5 +1,37 @@
 # GlacierMonitor Part 1 – Progress updates
 
+## 2026-10-10 – Part 2 started: cloud and shadow masks (approach A)
+
+### Done
+- `masks.py` written and run for all 10 years (method: `decisions.md` items 14–16). Outputs are in `GlacierMonitor/masks/`:
+  - `mask_YYYYMMDD.tif` (0 clear, 1 cloud, 2 cloud shadow, 3 terrain shadow, 255 no data)
+  - `compare_YYYYMMDD.tif` (cloud agreement: OmniCloudMask vs SCL)
+  - QGIS `.qml` styles, previews and `mask_summary.csv`
+- Results: cloud is 0–2.6% in every year except 2023 (6.4%). The 2023 and 2025 clouds are real and lie in the SW valleys,
+  off the main glaciers. **2022 (reference) has 0% cloud.** Terrain shadow is 3–7% in October and 11–12% in November (2024, 2025).
+- SCL (with the snow correction) calls 14–48% of each pre-2022 scene cloud, almost none of it real.
+
+### QGIS review (by eye, `compare_*.tif` over the image)
+- **2022:** no cloud; SCL-only patches are bright debris. No fixes.
+- **2017:** orange (OmniCloudMask only) is just a rim around clouds both methods found, so it's the thin cloud edge. No fixes.
+- **2021:** mask correct, no fixes. Cloud lies over the **upper parts of Changri Nup/Shar**, and possibly the top of
+  Lhotse Shar and upper Khumbu (approximate positions). The Khumbu and Ngozumpa tongues, Imja and Ama Dablam are clear.
+  → The 2021 per-glacier areas for those glaciers will be incomplete: flag them or gap-fill.
+  Check exactly with `glaciers.gpkg` once it exists.
+- **2023:** mask correct, no fixes. Real cloud covers the SW valleys (6.4%). Khumbu, Lobuche and Gokyo are clear;
+  the cloud field reaches the **very tip of the Ngozumpa tongue** at most. Note for the 2023 Ngozumpa area.
+- **2025:** mask correct, no fixes. Real cloud covers the SW valleys only. The blurry dark patches in the upper Ngozumpa
+  icefall area also appear in 2022 and 2024, so they are crevassed ice, not haze. For labelling: this is glacier, even though it looks dark.
+- **2018:** mask correct, no fixes. Cloud (0.4%) sits over the Everest–Lhotse massif / top of the Khumbu icefall (upper Khumbu);
+  the Khumbu tongue, Ngozumpa and Imja are clear.
+- **2016, 2019, 2020, 2024:** checked, no fixes (cloud < 1%). SCL-only areas are snow and debris, as expected.
+- **Review complete (2026-10-10): all 10 masks accepted as made by OmniCloudMask, with no hand fixes needed.**
+  Cloud on glaciers to note for the area step: 2021 (upper Changri Nup/Shar, maybe Lhotse Shar), 2018 (upper Khumbu),
+  2023 (tip of the Ngozumpa tongue at most).
+
+### Next
+- Then: labels (2022 first, then 2016 as an edited copy) and `tiles.csv`.
+
 ## 2026-10-07 – export complete
 
 ### Decisions (details in `decisions.md` 11–13)
