@@ -34,18 +34,24 @@ Dummy data is synthetic, so these numbers only show that the code works. They sa
 | `S2_YYYYMMDD.tif` | Part 1 `export.py` | unchanged: 7-band uint16, B02…B12 + SCL, nodata 0, 10 m, EPSG:32645 |
 | `CopDEM_GLO30_UTM45N.tif` | Part 1 `export.py` | unchanged: 30 m. Slope is computed here, and both layers are resampled to 10 m |
 | `label_<year>.tif` | Part 3 (Krisha) | uint8 on the **same 10 m grid** as that year's S2 file: 1 glacier, 0 not glacier, 255 ignore/unsure |
+| `masks/mask_YYYYMMDD.tif` | Part 2 (Krisha, `masks.py`) | uint8 on the same 10 m grid, one per S2 date: 0 clear, 1 cloud, 2 cloud shadow, 3 terrain shadow, 255 no data |
 | `tiles.csv` | Part 3 (Krisha) | columns `row, col, split` (+ optional `glacier`). Each row/col is a 256×256 tile's top-left pixel. Splits are `train`/`val`/`test`, and train tiles must not overlap val/test tiles |
 
 The NDSI channel is computed from the S2 bands. A separate preprocessed NDSI file isn't needed.
+
+`--masks <folder>` (train.py and predict.py) uses the Part 2 masks: cloud (1), cloud shadow (2) and no data (255)
+become no data, so they are ignored in training and come out as 255 in the predicted masks. Terrain shadow (3) is
+kept, because shadowed ice is still glacier. Each S2 file gets the mask with the same date; an `S2GEE_YYYY.tif` file
+gets the single mask of that year. These masks replace `--mask-cloud`, which uses SCL and is wrong before 2022.
 
 ## Run
 
 ```
 venv\Scripts\python make_dummy.py --out dummy                    # synthetic data for testing
 venv\Scripts\python train.py --s2 dummy\S2_20991024.tif --dem dummy\CopDEM_GLO30_UTM45N.tif ^
-    --label dummy\label_2099.tif --tiles dummy\tiles.csv --out runs\dummy --weights none
+    --label dummy\label_2099.tif --tiles dummy\tiles.csv --out runs\dummy --weights none --masks dummy\masks
 venv\Scripts\python predict.py --model runs\dummy\best.pt --dem dummy\CopDEM_GLO30_UTM45N.tif ^
-    --s2 dummy\S2_*.tif --out runs\dummy\pred
+    --s2 dummy\S2_*.tif --out runs\dummy\pred --masks dummy\masks
 venv\Scripts\python predict.py --model runs\dummy\best.pt --dem dummy\CopDEM_GLO30_UTM45N.tif ^
     --s2 dummy\S2_20991024.tif --label dummy\label_2099.tif --tiles dummy\tiles.csv --split test ^
     --out runs\dummy\test

@@ -20,6 +20,7 @@ import torch
 
 from data import IGNORE, TILE, load_stack, normalise, read_label, read_tiles
 from model import build_model, confusion, iou
+from data import read_mask
 
 PIXEL_KM2 = 10 * 10 / 1e6
 
@@ -63,6 +64,7 @@ def main():
     p.add_argument("--label", help="label GeoTIFF to score against (only for the S2 file it belongs to)")
     p.add_argument("--tiles", help="tiles.csv; with --split, score only those tiles")
     p.add_argument("--split", default="test")
+    p.add_argument("--masks", help="Part 2 masks folder (mask_YYYYMMDD.tif): cloud, cloud shadow -> no data")
     p.add_argument("--ndsi", type=float, default=0.4, help="NDSI threshold for the baseline comparison")
     args = p.parse_args()
 
@@ -83,6 +85,8 @@ def main():
     for f in files:
         stem = Path(f).stem
         x, valid, profile = load_stack(f, args.dem, ckpt.get("mask_cloud", False))
+        if args.masks:
+            valid &= ~read_mask(f, args.masks, profile)
         ndsi = x[6].copy()
         prob = predict_scene(model, normalise(x, valid, ckpt["stats"]), device, amp_dtype)
         mask = (prob >= args.threshold).astype("uint8")

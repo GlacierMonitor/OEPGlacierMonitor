@@ -17,6 +17,7 @@ import torch
 
 from data import CHANNELS, TileDataset, compute_stats, load_stack, normalise, read_label, read_tiles, save_stats
 from model import build_model, confusion, dice_bce_loss, iou
+from data import read_mask
 
 
 def evaluate(model, loader, device, amp_dtype):
@@ -44,6 +45,7 @@ def main():
     p.add_argument("--lr", type=float, default=3e-4)
     p.add_argument("--encoder", default="resnet34")
     p.add_argument("--weights", default="imagenet", help="'imagenet' or 'none'")
+    p.add_argument("--masks", help="Part 2 masks folder (mask_YYYYMMDD.tif): ignore cloud, cloud shadow, no data")
     p.add_argument("--mask-cloud", action="store_true", help="ignore SCL cloud pixels (only reliable 2022+)")
     p.add_argument("--seed", type=int, default=0)
     args = p.parse_args()
@@ -56,6 +58,8 @@ def main():
           f"mixed precision {amp_dtype}")
 
     x, valid, profile = load_stack(args.s2, args.dem, args.mask_cloud)
+    if args.masks:
+        valid &= ~read_mask(args.s2, args.masks, profile)
     y = read_label(args.label, valid, profile)
     tiles = read_tiles(args.tiles, valid.shape)
     train_t, val_t = tiles[tiles.split == "train"], tiles[tiles.split == "val"]

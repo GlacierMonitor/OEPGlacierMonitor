@@ -10,6 +10,7 @@ Labels and tiles (Part 3) are expected as:
     row/col are the pixel offsets of each tile's top-left corner, tile size = TILE
 """
 import json
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -23,6 +24,7 @@ TILE = 256
 IGNORE = 255
 SCL_BAD = (0, 1)                 # no data, saturated/defective
 SCL_CLOUD = (3, 8, 9, 10)        # shadow, cloud medium/high, cirrus (unreliable before 2022)
+MASK_IGNORE = (1, 2, 255)        # Part 2 masks: cloud, cloud shadow, no data (3 terrain shadow is kept)
 
 
 def slope_degrees(dem, res):
@@ -87,6 +89,23 @@ def read_label(path, valid, profile):
         raise ValueError(f"{path} is not on the same grid as the image (CRS or transform differs)")
     y[~valid] = IGNORE
     return y
+
+
+def read_mask(s2_path, mask_dir, profile):
+    """Bool (H, W): pixels the Part 2 mask says to ignore (cloud, cloud shadow, no data).
+
+    S2_YYYYMMDD.tif uses mask_YYYYMMDD.tif; S2GEE_YYYY.tif uses the one mask_YYYY*.tif of that year.
+    """
+    key = Path(s2_path).stem.split("_")[-1]
+    hits = sorted(Path(mask_dir).glob(f"mask_{key}*.tif")) if key.isdigit() and len(key) in (4, 8) else []
+    if len(hits) != 1:
+        raise ValueError(f"{s2_path}: expected one mask_{key}*.tif in {mask_dir}, found {len(hits)}")
+    with rasterio.open(hits[0]) as src:
+        m = src.read(1)
+        same = src.crs == profile["crs"] and src.transform.almost_equals(profile["transform"])
+    if m.shape != (profile["height"], profile["width"]) or not same:
+        raise ValueError(f"{hits[0]} is not on the same grid as {s2_path}")
+    return np.isin(m, MASK_IGNORE)
 
 
 def read_tiles(path, shape):

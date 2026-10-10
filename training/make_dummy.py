@@ -90,6 +90,17 @@ def main():
           S2_BANDS + ["SCL"])
     write(out / "label_2099.tif", glacier.astype("uint8"), t10, "uint8", 255, ["glacier"])
 
+    # Part 2 masks (0 clear, 1 cloud, 2 cloud shadow, 3 terrain shadow, 255 no data) in masks/
+    (out / "masks").mkdir(exist_ok=True)
+    for date in ("20991024", "20251122"):
+        cloud = blobs(h, w, 3, rng, w / 40) > 0.7
+        m = np.where(blobs(h, w, 8, rng, w / 30) > 0.6, 3, 0).astype("uint8")
+        m[np.roll(cloud, (h // 40, w // 40), (0, 1)) & ~cloud] = 2
+        m[cloud] = 1
+        m[:, :8] = 255
+        write(out / "masks" / f"mask_{date}.tif", m, t10, "uint8", 255,
+              ["0 clear, 1 cloud, 2 cloud shadow, 3 terrain shadow, 255 no data"])
+
     # non-overlapping tiles; strips 0-60% train, 60-80% val, 80-100% test
     rows = []
     for r in range(0, h - TILE + 1, TILE):
