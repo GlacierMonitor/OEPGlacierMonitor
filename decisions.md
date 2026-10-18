@@ -132,6 +132,43 @@ Open items still need a decision from the team (see bottom).
 - `GlacierMonitor/masks/mask_YYYYMMDD.tif`: uint8 on the 10 m grid; 0 clear, 1 cloud, 2 cloud shadow,
   3 terrain shadow, 255 no data. Where classes overlap, cloud wins over cloud shadow, which wins over terrain shadow.
 
+## Glacier inventory
+
+### 17. glaciers.gpkg: shapes kept cut to the study area; `edge` set from the geometry (2026-10-14)
+- Source: Snehi's inventory from RGI 7.0, Region 15 (G product; outlines dated 1992–2001), in EPSG:32645.
+  Columns are `glacier_id` (RGI id), `glacier_name`, `rgi_area_km2`, `edge` and `debris`.
+- The extract was run with "Clip features to extent" ticked, so the 29 glaciers crossing the boundary are cut.
+  **Kept as is:** we only measure inside the study area, so the cut shape is the part the images cover.
+  Redoing the extract would also have lost the names and debris values already entered.
+  `rgi_area_km2` is still the **full** RGI area, so for edge glaciers it is larger than the shape.
+- Corrections, made by Krish on a copy (Snehi's original is unchanged):
+  - `edge` recomputed from the geometry: 1 if the shape was cut (shape area < 98% of RGI area), crosses
+    the boundary or is within 20 m of it. 18 values changed; 32 glaciers are now edge = 1.
+  - fid 148 deleted (a 710 m² sliver left by the cut).
+  - "Ama dablam Glacier" renamed to "Ama Dablam Glacier".
+- Names: Ngozumpa (RGI spells it "Ngojumba", renamed); Changri Nup and Changri Shar are **one** RGI
+  outline, "Changri Shar/Nup Gl", and are reported as one glacier. Lobuche and Ama Dablam were named by hand.
+- Result: 252 glaciers, 42 larger than 1 km², 0 invalid shapes, 0 overlaps. The outlines line up with S2_20221024.
+
+## Part 3 – labels and training squares
+
+### 18. Label 48 squares, split by glacier (2026-10-18)
+- Labels are drawn only inside 48 squares of 256 × 256 px (2.56 km), not over the whole scene. Kavya's
+  training reads squares from `tiles.csv`; everything outside them is 255 (ignore).
+- **Split by glacier, so the model is tested on glaciers it never saw:**
+  - test (15): all of Khumbu and Imja/Lhotse Shar, so the whole of each glacier is in the test set;
+  - val (6): Changri Shar/Nup and Lobuche;
+  - train (27): Ngozumpa (10, tongue + basin), Ama Dablam (3), plus the squares with the most off-glacier snow,
+    lakes, terrain shadow and debris, 2 rock/valley squares and 3 ordinary mixed squares.
+  - No train square contains any part of a test or val glacier.
+- The splits have a similar mix (glacier ~40–52%, debris ~29–40%).
+- Squares with up to 1% S2 no-data pixels are allowed. The two Khumbu/Imja squares have only 4–8 such pixels,
+  which the loader ignores.
+- Drawing file `labels/labels_<year>.gpkg` starts from the corrected inventory outlines and has an `unsure` layer (→ 255).
+  `make_labels.py build` also sets S2 no data and mask cloud / cloud shadow to 255. Terrain shadow stays labelled.
+- 2016 (for the Siamese network) will be made by copying the finished 2022 drawing
+  (`setup --year 2016 --from 2022`) and moving only edges that clearly changed.
+
 
 ## Open – needs a team decision
 1. **Fresh-snow judgement for each year** (Snehi, scene log). For 2016–2021 it has to come from the
