@@ -7,7 +7,8 @@ Usage:
     venv/Scripts/python make_dummy.py --out dummy_full --full   # real 3220 x 3940 grid
 
 Writes S2_20991024.tif and S2_20251122.tif (glaciers shrunk), CopDEM_GLO30_UTM45N.tif,
-label_2099.tif and tiles.csv (train/val/test in separate vertical strips = separate glaciers).
+label_2099.tif, tiles.csv (train/val/test in separate vertical strips = separate glaciers), and
+glacier_ids.tif + glacier_ids.csv (one outline per connected glacier, like the RGI-based ID raster).
 """
 import argparse
 from pathlib import Path
@@ -15,6 +16,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import rasterio
+from rasterio.features import rasterize, shapes
 from rasterio.transform import from_origin
 
 from data import S2_BANDS, TILE
@@ -98,8 +100,21 @@ def main():
             rows.append({"row": r, "col": c, "split": "train" if f < 0.6 else "val" if f < 0.8 else "test"})
     tiles = pd.DataFrame(rows)
     tiles.to_csv(out / "tiles.csv", index=False)
+
+    # glacier outlines: each connected glacier of 2099 (>= 1000 px) gets its own integer ID
+    polys = [g for g, _ in shapes(glacier.astype("uint8"), mask=glacier, connectivity=8, transform=t10)]
+    ids = np.zeros((h, w), "int32")
+    for g in polys:
+        one = rasterize([(g, 1)], out_shape=(h, w), transform=t10, dtype="uint8")
+        if one.sum() >= 1000:
+            ids[(one == 1) & (ids == 0)] = ids.max() + 1
+    write(out / "glacier_ids.tif", ids, t10, "int32", None, ["glacier_id"])
+    pd.DataFrame({"value": range(1, ids.max() + 1),
+                  "glacier_id": [f"DUMMY-{i:03d}" for i in range(1, ids.max() + 1)],
+                  "glacier_name": [f"Dummy {i}" for i in range(1, ids.max() + 1)]}
+                 ).to_csv(out / "glacier_ids.csv", index=False)
     print(f"{out}: {h}x{w} px, glacier {glacier.mean():.1%} (debris {debris.mean():.1%}), "
-          f"tiles {tiles.split.value_counts().to_dict()}")
+          f"tiles {tiles.split.value_counts().to_dict()}, {ids.max()} glacier outlines")
 
 
 if __name__ == "__main__":
