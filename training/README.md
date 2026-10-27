@@ -75,6 +75,9 @@ input. It writes `rf.joblib`, `scores.json` and `<scene>_prob.tif` / `<scene>_ma
   still required: pixels outside the DEM stay invalid, so both versions are scored on the same pixels.
 - SCL cloud masking is **off** by default (`--mask-cloud` turns it on), because SCL marks snow and debris
   as cloud before 2022 (see `decisions.md`). Cloud gap-filling belongs to Part 2.
+- Approach B files (`S2GEE_YYYY.tif`, Earth Engine composites) have only the 6 bands and no SCL. They load
+  as they are: Cloud Score+ already masked cloud in Earth Engine, so the SCL steps (and `--mask-cloud`) are
+  skipped for them. The bands must be in the order B02, B03, B04, B08, B11, B12, either named that way or unnamed.
 - Areas count every pixel classed as glacier, so lakes and seasonal snow are included if the model labels them glacier.
   The ± half-pixel error margin is added in the results step.
 
