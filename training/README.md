@@ -69,6 +69,10 @@ input. It writes `rf.joblib`, `scores.json` and `<scene>_prob.tif` / `<scene>_ma
 `predict.py`. On the full 3220 × 3940 grid, fitting takes about 2 s and mapping one scene about 12 s on the laptop CPU.
 
 ## Notes
+- `--no-terrain` (train.py) leaves out elevation and slope, giving 7 inputs. Elevation and slope are the same
+  every year, so with one labelled year the model might learn glacier position from terrain alone. Train
+  both versions and compare. The choice is stored in `best.pt`, so `predict.py` needs no flag. `--dem` is
+  still required: pixels outside the DEM stay invalid, so both versions are scored on the same pixels.
 - SCL cloud masking is **off** by default (`--mask-cloud` turns it on), because SCL marks snow and debris
   as cloud before 2022 (see `decisions.md`). Cloud gap-filling belongs to Part 2.
 - Areas count every pixel classed as glacier, so lakes and seasonal snow are included if the model labels them glacier.

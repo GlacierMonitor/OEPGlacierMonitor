@@ -18,7 +18,8 @@ import torch
 from rasterio.warp import Resampling, reproject
 
 S2_BANDS = ["B02", "B03", "B04", "B08", "B11", "B12"]
-CHANNELS = S2_BANDS + ["NDSI", "elevation", "slope"]
+TERRAIN = ["elevation", "slope"]   # identical every year; --no-terrain drops them
+CHANNELS = S2_BANDS + ["NDSI"] + TERRAIN
 TILE = 256
 IGNORE = 255
 SCL_BAD = (0, 1)                 # no data, saturated/defective
@@ -77,6 +78,11 @@ def load_stack(s2_path, dem_path, mask_cloud=False):
     return x, valid, profile
 
 
+def select_channels(x, channels):
+    """Keep only the named channels (CHANNELS order in, given order out)."""
+    return x[[CHANNELS.index(c) for c in channels]]
+
+
 def read_label(path, valid, profile):
     with rasterio.open(path) as src:
         y = src.read(1).astype("uint8")
@@ -108,9 +114,9 @@ def read_tiles(path, shape):
 
 
 # --- Normalisation (training-set statistics) ----------------------------------
-def compute_stats(x, y, tiles):
+def compute_stats(x, y, tiles, channels=CHANNELS):
     """Per-channel mean/std over labelled pixels of the training tiles only."""
-    sums = np.zeros(len(CHANNELS)); sq = np.zeros(len(CHANNELS)); n = 0
+    sums = np.zeros(len(x)); sq = np.zeros(len(x)); n = 0
     for r, c in tiles[["row", "col"]].itertuples(index=False):
         m = y[r:r + TILE, c:c + TILE] != IGNORE
         v = x[:, r:r + TILE, c:c + TILE][:, m].astype("float64")
@@ -119,7 +125,7 @@ def compute_stats(x, y, tiles):
         raise ValueError("training tiles have no labelled pixels")
     mean = sums / n
     std = np.sqrt(np.maximum(sq / n - mean ** 2, 1e-12))
-    return {"channels": CHANNELS, "mean": mean.tolist(), "std": std.tolist()}
+    return {"channels": channels, "mean": mean.tolist(), "std": std.tolist()}
 
 
 def normalise(x, valid, stats):

@@ -6,10 +6,10 @@ import torch.nn.functional as F
 from data import CHANNELS, IGNORE
 
 
-def build_model(encoder="resnet34", weights="imagenet"):
-    # smp adapts the pretrained 3-channel first conv to len(CHANNELS) inputs
+def build_model(encoder="resnet34", weights="imagenet", in_channels=len(CHANNELS)):
+    # smp adapts the pretrained 3-channel first conv to in_channels inputs
     return smp.Unet(encoder_name=encoder, encoder_weights=weights,
-                    in_channels=len(CHANNELS), classes=1)
+                    in_channels=in_channels, classes=1)
 
 
 def dice_bce_loss(logits, target, dice_weight=0.5):

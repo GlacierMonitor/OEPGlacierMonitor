@@ -18,7 +18,7 @@ import numpy as np
 import rasterio
 import torch
 
-from data import IGNORE, TILE, load_stack, normalise, read_label, read_tiles
+from data import CHANNELS, IGNORE, TILE, load_stack, normalise, read_label, read_tiles, select_channels
 from model import build_model, confusion, iou
 
 PIXEL_KM2 = 10 * 10 / 1e6
@@ -74,16 +74,19 @@ def main():
     amp_dtype = torch.bfloat16 if device.type == "cuda" and torch.cuda.is_bf16_supported() else None
 
     ckpt = torch.load(args.model, map_location="cpu", weights_only=False)
-    model = build_model(ckpt["encoder"], weights=None)
+    channels = ckpt.get("channels", CHANNELS)
+    model = build_model(ckpt["encoder"], weights=None, in_channels=len(channels))
     model.load_state_dict(ckpt["model"])
     model.to(device).eval()
-    print(f"model {args.model} (epoch {ckpt['epoch']}, val IoU {ckpt['val_iou']:.4f})")
+    print(f"model {args.model} (epoch {ckpt['epoch']}, val IoU {ckpt['val_iou']:.4f}), "
+          f"inputs: {', '.join(channels)}")
 
     rows = []
     for f in files:
         stem = Path(f).stem
         x, valid, profile = load_stack(f, args.dem, ckpt.get("mask_cloud", False))
         ndsi = x[6].copy()
+        x = select_channels(x, channels)
         prob = predict_scene(model, normalise(x, valid, ckpt["stats"]), device, amp_dtype)
         mask = (prob >= args.threshold).astype("uint8")
         mask[~valid] = 255

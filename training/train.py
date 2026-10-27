@@ -15,7 +15,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from data import CHANNELS, TileDataset, compute_stats, load_stack, normalise, read_label, read_tiles, save_stats
+from data import CHANNELS, TERRAIN, TileDataset, compute_stats, load_stack, normalise, read_label, read_tiles, save_stats, select_channels
 from model import build_model, confusion, dice_bce_loss, iou
 
 
@@ -45,6 +45,8 @@ def main():
     p.add_argument("--encoder", default="resnet34")
     p.add_argument("--weights", default="imagenet", help="'imagenet' or 'none'")
     p.add_argument("--mask-cloud", action="store_true", help="ignore SCL cloud pixels (only reliable 2022+)")
+    p.add_argument("--no-terrain", action="store_true",
+                   help="leave out elevation and slope (they never change between years)")
     p.add_argument("--seed", type=int, default=0)
     args = p.parse_args()
 
@@ -64,7 +66,11 @@ def main():
     print(f"tiles: {len(train_t)} train, {len(val_t)} val, {(tiles.split == 'test').sum()} test "
           f"(test is not touched here)")
 
-    stats = compute_stats(x, y, train_t)
+    channels = [c for c in CHANNELS if not (args.no_terrain and c in TERRAIN)]
+    x = select_channels(x, channels)
+    print(f"inputs ({len(channels)}): {', '.join(channels)}")
+
+    stats = compute_stats(x, y, train_t, channels)
     save_stats(stats, out / "stats.json")
     x = normalise(x, valid, stats)
 
@@ -75,7 +81,7 @@ def main():
                                          pin_memory=device.type == "cuda")
 
     weights = None if args.weights.lower() == "none" else args.weights
-    model = build_model(args.encoder, weights).to(device)
+    model = build_model(args.encoder, weights, len(channels)).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.epochs)
 
@@ -103,7 +109,7 @@ def main():
             mark = ""
             if val_iou > best:
                 best, since_best, mark = val_iou, 0, "  * saved"
-                torch.save({"model": model.state_dict(), "encoder": args.encoder, "channels": CHANNELS,
+                torch.save({"model": model.state_dict(), "encoder": args.encoder, "channels": channels,
                             "stats": stats, "epoch": epoch, "val_iou": val_iou,
                             "mask_cloud": args.mask_cloud, "s2": str(args.s2)}, out / "best.pt")
             else:
