@@ -68,7 +68,8 @@ venv\Scripts\python rf_baseline.py --s2 dummy\S2_20991024.tif --dem dummy\CopDEM
     --label dummy\label_2099.tif --tiles dummy\tiles.csv --out runs\rf_dummy --predict dummy\S2_*.tif
 ```
 
-This is a per-pixel scikit-learn `RandomForestClassifier` on the same 9 inputs as the U-Net. It samples up to
+This is a per-pixel scikit-learn `RandomForestClassifier` on the same 9 inputs as the U-Net (7 with
+`--no-terrain`; `--masks` uses the Part 2 masks, as in train.py). It samples up to
 50 000 labelled pixels per class (`--samples`) from the train tiles only, then maps the reference scene and
 any `--predict` scenes. It prints val/test IoU next to the NDSI > 0.4 baseline, plus the importance of each
 input. It writes `rf.joblib`, `scores.json` and `<scene>_prob.tif` / `<scene>_mask.tif` in the same format as
@@ -101,3 +102,55 @@ come from the file name: `S2_` files are A and `S2GEE_` files are B. Rows for th
 preprocessing and method are replaced, and all other rows are kept. If more than 5 % of a glacier has no
 data (`--max-nodata`), its area is left empty instead of being undercounted. `make_dummy.py` also writes a
 dummy `glacier_ids.tif` and `glacier_ids.csv` (one outline per connected glacier).
+
+## Glacier-ID raster
+
+```
+venv\Scripts\python glacier_ids.py --gpkg glaciers.gpkg --s2 raw\sentinel2\S2_20221024.tif --out glacier_ids.tif
+```
+
+Burns the inventory outlines onto the 10 m grid. It writes `glacier_ids.tif` (the outline's fid, 0 elsewhere; where
+outlines overlap, the smaller glacier keeps the pixel) and `glacier_ids.csv` (`value, glacier_id, glacier_name,
+debris, pixels`). `glacier_areas.py` and `score.py` read both. The GeoPackage is read directly, so GDAL is not needed.
+
+## Scoring (score.py)
+
+```
+venv\Scripts\python score.py run --pred runs\x\ref\S2_20221024_mask.tif --s2 S2_20221024.tif ^
+    --dem CopDEM_GLO30_UTM45N.tif --masks masks --label label_2022.tif --tiles tiles.csv ^
+    --glaciers glacier_ids.tif --lookup glacier_ids.csv --out runs\x\scores.json
+```
+
+`--ndsi 0.4` in place of `--pred` scores the NDSI baseline. For val and test it reports IoU, precision, recall, F1
+and area bias (predicted minus labelled glacier area, as a % of labelled). With the glacier-ID raster it also reports:
+
+- **test_strict:** the test squares without any glacier the model has partly seen in train or val squares (Lhotse,
+  Nuptse and Changri, plus any others the outlines show). A glacier counts as seen if at least 2000 of its outline
+  pixels, and at least 10 % of its in-square area, lie in train/val squares. Each pixel belongs to the nearest
+  outline within 300 m (`--buffer 30`), so a tongue that has moved since the outline was drawn still counts as that
+  glacier. The left-out glaciers are listed in `scores.json`.
+- **per-glacier** IoU on the test squares, for glaciers with at least 1000 labelled glacier pixels there.
+- **clean vs debris** recall: labelled glacier pixels with NDSI > 0.4 vs NDSI <= 0.4. This split is made with NDSI,
+  so the NDSI baseline gets 1 and 0 by construction; it is for comparing the models.
+
+`score.py collect runs\matrix --out runs\matrix\results` gathers every `scores.json` into `results_runs.csv` (one
+row per run), `results_summary.csv` (mean, sd and n over seeds for each setting) and `results_glaciers.csv`.
+
+## Experiment matrix (run_all.py)
+
+```
+venv\Scripts\python run_all.py --data "D:\My Drive\GlacierMonitor" --label label_2022.tif --tiles tiles.csv ^
+    --glaciers glacier_ids.tif --lookup glacier_ids.csv --out runs\matrix --dry-run
+```
+
+Trains, maps and scores every combination of `--methods unet rf ndsi`, `--seeds 0 1 2 3 4`, `--terrain on off`,
+`--cloud ocm scl none` and `--split glacier random`. The default is 21 runs: U-Net and RF x 5 seeds x terrain
+on/off with the Part 2 masks, plus NDSI. `--all-years` also maps every S2 file for the area time series. Each run
+has its own folder with `run.log`, and finished steps are skipped, so after a stop just rerun the same command.
+Remove `--dry-run` to start. Skipping looks only at which files exist, so use a new `--out` folder whenever the label
+or tiles.csv changes. `random_split.py` makes the random-split control: the same squares and counts per
+split, dealt out at random with the run's seed.
+
+Tested on 31 Oct on the real 2022 scene with a stand-in label (RGI outlines, not our labels, so the scores mean
+nothing yet). With 5 epochs a U-Net or RF run took about 1 min, most of it loading data. Reading a scene from a
+streamed Drive folder takes about 1.5 min the first time, so set `raw` and `masks` to "Available offline" first.
