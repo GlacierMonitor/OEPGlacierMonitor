@@ -4,6 +4,8 @@
   venv\\Scripts\\python make_labels.py setup --year 2016 --from 2022   # copy a finished drawing to another year
   venv\\Scripts\\python make_labels.py split --year 2022         # one drawing file per labeller + review files
   venv\\Scripts\\python make_labels.py build --year 2022         # after drawing: label_2022.tif
+  venv\\Scripts\\python make_labels.py ids --year 2022           # glacier_ids.tif + .csv for the 20 glaciers
+  venv\\Scripts\\python make_labels.py redraw --year 2022        # blind-redraw files for the agreement check
 
 setup writes, in GlacierMonitor/labels/:
   tiles.csv              row, col, split: top-left pixel of each 256 x 256 square (Kavya's training format)
@@ -16,6 +18,9 @@ split rewrites tiles.csv with all SQUARES and copies labels_<year>.gpkg to one f
   review_<year>_<labeller>.gpkg   empty 'notes' point layer for the reviewer of that labeller's squares
 build writes label_<year>.tif on the year's S2 grid: 1 glacier, 0 not glacier, 255 ignore.
 If the per-labeller files exist, each square is taken from its labeller's file; otherwise from labels_<year>.gpkg.
+ids writes glacier_ids.tif (one value per study glacier, 0 elsewhere) + glacier_ids.csv (value, glacier_id,
+  glacier_name) for training/glacier_areas.py, from the same outlines as build (labels_<year>.gpkg outside the squares).
+redraw writes labels_<year>_redraw_<who>.gpkg: inventory outlines, only that person's REDRAW squares.
 255 = outside the squares, 'unsure' polygons, S2 no data, and cloud / cloud shadow from masks/mask_<date>.tif.
 Terrain shadow stays labelled (shadowed ice is still glacier).
 """
@@ -65,6 +70,24 @@ PLACES = {(6, 8): "Gorak Shep", (7, 3): "Gokyo", (7, 4): "Thangnak", (7, 8): "Lo
           (9, 4): "Machhermo", (9, 8): "Pheriche, Dingboche", (9, 10): "Chukhung", (10, 1): "Lungden",
           (11, 5): "Phortse", (11, 7): "Pangboche"}
 REVIEWER = {"krisha": "siddhi", "kavya": "snehi"}
+# Blind redraw for the two-person agreement number (decisions.md 19): test squares redrawn from the inventory
+# outlines by someone who has not seen the first drawing.
+REDRAW = {"siddhi": [(5, 10), (6, 11), (7, 8), (8, 7), (8, 8), (8, 13), (9, 12), (9, 13)],
+          "snehi": [(7, 2), (8, 2), (9, 2), (9, 3), (10, 2)]}
+# The 20 study glaciers (decisions.md 19) by RGI id, with the names written to glacier_ids.csv / results.csv.
+# The unnamed ones carry working names after the nearest village until the team agrees on names.
+GLACIERS = {
+    "RGI2000-v7.0-G-15-08331": "Khumbu", "RGI2000-v7.0-G-15-06763": "Imja/Lhotse Shar",
+    "RGI2000-v7.0-G-15-06797": "Amphu Laptse", "RGI2000-v7.0-G-15-06748": "Gorak Shep (fid 96)",
+    "RGI2000-v7.0-G-15-06700": "Gokyo (fid 48)", "RGI2000-v7.0-G-15-06701": "Na (fid 49)",
+    "RGI2000-v7.0-G-15-06712": "Machhermo (fid 60)", "RGI2000-v7.0-G-15-06713": "Lungden (fid 61)",
+    "RGI2000-v7.0-G-15-08295": "Changri Shar/Nup", "RGI2000-v7.0-G-15-06739": "Lobuche",
+    "RGI2000-v7.0-G-15-08346": "Cholo", "RGI2000-v7.0-G-15-08342": "Cholotse",
+    "RGI2000-v7.0-G-15-06741": "Lobuche village (fid 89)", "RGI2000-v7.0-G-15-08305": "Ngozumpa",
+    "RGI2000-v7.0-G-15-06794": "Ama Dablam", "RGI2000-v7.0-G-15-06755": "Nuptse",
+    "RGI2000-v7.0-G-15-06758": "Lhotse", "RGI2000-v7.0-G-15-06793": "Duwo",
+    "RGI2000-v7.0-G-15-06795": "Ombigaichain", "RGI2000-v7.0-G-15-06724": "Dzongla (fid 72)",
+}
 
 
 def labeller(r, c, split):
@@ -103,6 +126,15 @@ def read_layer(path, table):
     con = sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True)
     try:
         return [gpkg_geom(g) for (g,) in con.execute(f'select geom from "{table}" where geom is not null')]
+    finally:
+        con.close()
+
+
+def read_glaciers(path):
+    """(shape, RGI glacier_id) for every outline in the 'glaciers' layer; parts split off in QGIS keep their id."""
+    con = sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True)
+    try:
+        return [(gpkg_geom(g), gid) for g, gid in con.execute('select geom, glacier_id from "glaciers" where geom is not null')]
     finally:
         con.close()
 
@@ -240,6 +272,76 @@ def split_files(year):
         con.close()
 
 
+def redraw_files(year):
+    """Fresh drawing files from the inventory outlines, holding only each blind redrawer's squares."""
+    with rasterio.open(s2_file(year)) as s:
+        transform = s.transform
+    outs = {who: LABEL_DIR / f"labels_{year}_redraw_{who}.gpkg" for who in REDRAW}
+    if any(o.exists() for o in outs.values()):
+        raise SystemExit("redraw files already exist - not overwriting anyone's drawing")
+    split = {(r, c): s for s, sq in SQUARES.items() for r, c in sq}
+    for who, out in outs.items():
+        shutil.copyfile(INVENTORY, out)
+        con = sqlite3.connect(out)
+        try:
+            add_layer(con, "unsure", [("note", "TEXT")], [])
+            add_layer(con, "squares", [("row", "INTEGER"), ("col", "INTEGER"), ("split", "TEXT"), ("name", "TEXT")],
+                      [(square_box(transform, r, c), r * TILE, c * TILE, split[r, c], f"{r},{c}") for r, c in REDRAW[who]])
+            con.commit()
+            print(f"-> {out.name}: {len(REDRAW[who])} squares from the inventory outlines, integrity",
+                  con.execute("pragma integrity_check").fetchone()[0])
+        finally:
+            con.close()
+
+
+def merge_by_labeller(year, tiles, base, draw):
+    """base, with each square replaced by draw(<its labeller's file>) when the per-labeller files exist."""
+    files = {who: LABEL_DIR / f"labels_{year}_{who}.gpkg" for who in REVIEWER}
+    if not any(p.exists() for p in files.values()):
+        return base
+    missing = [p.name for p in files.values() if not p.exists()]
+    if missing:
+        raise SystemExit(f"missing {missing}")
+    for who, path in files.items():
+        yw = draw(path)
+        for r, c, s in tiles[["row", "col", "split"]].itertuples(index=False):
+            if labeller(r // TILE, c // TILE, s) == who:
+                base[r:r + TILE, c:c + TILE] = yw[r:r + TILE, c:c + TILE]
+    return base
+
+
+def glacier_ids(year):
+    """glacier_ids.tif + .csv for the 20 glaciers (format of training/glacier_areas.py): the year's final
+    outlines inside the squares, labels_<year>.gpkg (inventory + earlier edits) outside them."""
+    with rasterio.open(s2_file(year)) as s:
+        profile = s.profile
+    shape, transform = (profile["height"], profile["width"]), profile["transform"]
+    tiles = pd.read_csv(TILES_CSV)
+    value = {gid: i for i, gid in enumerate(GLACIERS, start=1)}
+
+    def draw(path):
+        shapes = [(g, value[gid]) for g, gid in read_glaciers(path) if gid in value]
+        return rasterize(shapes, out_shape=shape, transform=transform, fill=0, dtype="uint8")
+
+    ids = merge_by_labeller(year, tiles, draw(LABEL_DIR / f"labels_{year}.gpkg"), draw)
+    out = LABEL_DIR / "glacier_ids.tif"
+    p = {"driver": "GTiff", "height": shape[0], "width": shape[1], "count": 1, "dtype": "uint8",
+         "crs": profile["crs"], "transform": transform, "compress": "deflate", "tiled": True,
+         "blockxsize": 512, "blockysize": 512}
+    with rasterio.open(out, "w", **p) as d:
+        d.write(ids, 1)
+        d.set_band_description(1, "glacier value (glacier_ids.csv), 0 no glacier")
+    lookup = pd.DataFrame({"value": list(value.values()), "glacier_id": list(value), "glacier_name": list(GLACIERS.values())})
+    lookup.to_csv(out.with_suffix(".csv"), index=False)
+
+    px = np.bincount(ids.ravel(), minlength=len(value) + 1)
+    print(f"-> {out.name} + {out.with_suffix('.csv').name}: {len(value)} glaciers")
+    for v, name in zip(lookup.value, lookup.glacier_name):
+        print(f"   {v:2d} {name:26s} {px[v] / 1e4:7.2f} km2")
+    if (px[1:] == 0).any():
+        sys.exit("a glacier has no pixels - check its glacier_id in the drawing")
+
+
 def rasterize_drawing(drawing, shape, transform):
     glacier = read_layer(drawing, "glaciers")
     unsure = read_layer(drawing, "unsure")
@@ -261,19 +363,11 @@ def build(year):
     tiles = pd.read_csv(TILES_CSV)
     check_tiles(tiles, shape)
 
-    split_drawings = {who: LABEL_DIR / f"labels_{year}_{who}.gpkg" for who in REVIEWER}
-    if any(p.exists() for p in split_drawings.values()):
-        missing = [p.name for p in split_drawings.values() if not p.exists()]
-        if missing:
-            raise SystemExit(f"missing {missing}")
-        y = np.full(shape, IGNORE, "uint8")
-        for who, path in split_drawings.items():
-            yw = rasterize_drawing(path, shape, transform)
-            for r, c, s in tiles[["row", "col", "split"]].itertuples(index=False):
-                if labeller(r // TILE, c // TILE, s) == who:
-                    y[r:r + TILE, c:c + TILE] = yw[r:r + TILE, c:c + TILE]
+    draw = lambda path: rasterize_drawing(path, shape, transform)
+    if any((LABEL_DIR / f"labels_{year}_{who}.gpkg").exists() for who in REVIEWER):
+        y = merge_by_labeller(year, tiles, np.full(shape, IGNORE, "uint8"), draw)
     else:
-        y = rasterize_drawing(LABEL_DIR / f"labels_{year}.gpkg", shape, transform)
+        y = draw(LABEL_DIR / f"labels_{year}.gpkg")
 
     inside = np.zeros(shape, bool)
     for r, c in tiles[["row", "col"]].itertuples(index=False):
@@ -311,11 +405,12 @@ def build(year):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
-    p.add_argument("command", choices=["setup", "split", "build"])
+    p.add_argument("command", choices=["setup", "split", "build", "ids", "redraw"])
     p.add_argument("--year", type=int, default=2022)
     p.add_argument("--from", dest="from_year", type=int, help="setup: copy this year's drawing instead of the inventory")
     a = p.parse_args()
-    {"setup": lambda: setup(a.year, a.from_year), "split": lambda: split_files(a.year), "build": lambda: build(a.year)}[a.command]()
+    {"setup": lambda: setup(a.year, a.from_year), "split": lambda: split_files(a.year), "build": lambda: build(a.year),
+     "ids": lambda: glacier_ids(a.year), "redraw": lambda: redraw_files(a.year)}[a.command]()
 
 
 if __name__ == "__main__":
