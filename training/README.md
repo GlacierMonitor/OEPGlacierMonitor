@@ -151,6 +151,26 @@ Remove `--dry-run` to start. Skipping looks only at which files exist, so use a 
 or tiles.csv changes. `random_split.py` makes the random-split control: the same squares and counts per
 split, dealt out at random with the run's seed.
 
+With `--all-years`, the NDSI baseline also maps every year (`ndsi_map.py`, same mask format as `predict.py`), so
+all three methods get an area time series.
+
+## Error budget (error_budget.py)
+
+```
+venv\Scripts\python error_budget.py --runs runs\matrix --glaciers glacier_ids.tif --lookup glacier_ids.csv ^
+    --values 211 236 111 201 87 142 48 49 72 60 61 247 251 106 103 145 141 143 89 96 ^
+    --exclude-years 2025 --out runs\matrix\budget
+```
+
+Reads the year maps of every run made with `run_all.py --all-years` and works out the area of each study glacier
+(`--values`: fids in glacier_ids.tif; default: named outlines of at least 1 km2) in each year for each run. The
+spread between runs is split into seed, one part per factor that varies in the matrix (method, terrain, cloud,
+split, preprocessing) and the total. The same split is done for the change between years, which gives the
+minimum detectable change (MDC95 = 1.96 x SD of the change) and the correlation of errors between years. It also
+fits a trend per run, and reports the glacier area mapped on ground more than 300 m from any outline as a control.
+Writes `budget_areas.csv`, `_budget.csv`, `_change.csv`, `_trend.csv` and `_offglacier.csv`. Label error and any
+bias that all runs share are not in this budget.
+
 Tested on 31 Oct on the real 2022 scene with a stand-in label (RGI outlines, not our labels, so the scores mean
 nothing yet). With 5 epochs a U-Net or RF run took about 1 min, most of it loading data. Reading a scene from a
 streamed Drive folder takes about 1.5 min the first time, so set `raw` and `masks` to "Available offline" first.
