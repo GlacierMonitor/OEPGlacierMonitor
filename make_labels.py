@@ -2,6 +2,7 @@
 
   venv\\Scripts\\python make_labels.py setup                     # once: tiles.csv + labels_2022.gpkg
   venv\\Scripts\\python make_labels.py setup --year 2016 --from 2022   # copy a finished drawing to another year
+  venv\\Scripts\\python make_labels.py split --year 2022         # one drawing file per labeller + review files
   venv\\Scripts\\python make_labels.py build --year 2022         # after drawing: label_2022.tif
 
 setup writes, in GlacierMonitor/labels/:
@@ -9,8 +10,12 @@ setup writes, in GlacierMonitor/labels/:
   labels_<year>.gpkg     the drawing file, with three layers:
                            glaciers  copy of inventory/glaciers.gpkg (or of another year's drawing): edit to match the image
                            unsure    empty: draw areas you cannot decide (they become 255)
-                           squares   the 48 squares, read-only guide for where to work
+                           squares   the squares, read-only guide for where to work
+split rewrites tiles.csv with all SQUARES and copies labels_<year>.gpkg to one file per labeller:
+  labels_<year>_<labeller>.gpkg   glaciers + unsure as in labels_<year>.gpkg; squares = only that labeller's squares
+  review_<year>_<labeller>.gpkg   empty 'notes' point layer for the reviewer of that labeller's squares
 build writes label_<year>.tif on the year's S2 grid: 1 glacier, 0 not glacier, 255 ignore.
+If the per-labeller files exist, each square is taken from its labeller's file; otherwise from labels_<year>.gpkg.
 255 = outside the squares, 'unsure' polygons, S2 no data, and cloud / cloud shadow from masks/mask_<date>.tif.
 Terrain shadow stays labelled (shadowed ice is still glacier).
 """
@@ -35,17 +40,36 @@ MASK_DIR = C.ROOT / "GlacierMonitor" / "masks"
 TILES_CSV = LABEL_DIR / "tiles.csv"
 TILE, IGNORE, SRS = 256, 255, 32645
 
-# Squares agreed 2026-10-18 (decisions.md 18), as (tile row, tile col); pixel offset = index * 256.
-# Split by glacier: test = all of Khumbu + Imja/Lhotse Shar, val = Changri Shar/Nup + Lobuche,
-# train = Ngozumpa, Ama Dablam and squares picked for off-glacier snow, lakes, shadow, debris, rock.
+# Squares agreed 2026-10-18, tongue ends added 2026-10-27 (decisions.md 18), 20 glaciers 2026-10-31 (decisions.md 19),
+# as (tile row, tile col); pixel offset = index * 256. Split by glacier: test = Khumbu, Imja/Lhotse Shar, Amphu Laptse
+# and the small glaciers above Gorak Shep, Gokyo, Na, Machhermo, Lungden; val = Changri Shar/Nup, Lobuche, Cholo,
+# Cholotse; train = Ngozumpa, Ama Dablam, Nuptse, Lhotse, Duwo, Ombigaichain, Dzongla glacier, and squares picked
+# for off-glacier snow, lakes, shadow, debris, rock and villages / vegetation.
 SQUARES = {
     "test": [(5, 9), (5, 10), (5, 11), (6, 8), (6, 9), (6, 10), (6, 11), (6, 12), (7, 8), (7, 13), (7, 14),
-             (8, 13), (9, 12), (9, 13), (10, 13)],
-    "val": [(4, 7), (5, 7), (5, 8), (6, 6), (6, 7), (7, 7)],
+             (8, 13), (9, 12), (9, 13), (10, 13),
+             (8, 7), (8, 8),                                      # Khumbu lower tongue + tongue end
+             (7, 2), (8, 2), (9, 2), (9, 3), (10, 2), (10, 12),   # 20 glaciers: above Gokyo, Na, Machhermo, Lungden;
+             (9, 4), (10, 1)],                                    #   Amphu Laptse; Machhermo, Lungden villages
+    "val": [(4, 7), (5, 7), (5, 8), (6, 6), (6, 7), (7, 7),
+            (9, 5), (9, 6), (9, 7), (9, 8)],                      # 20 glaciers: Cholotse, Cholo; Pheriche, Dingboche
     "train": [(0, 2), (0, 5), (1, 2), (1, 3), (1, 4), (1, 5), (2, 2), (2, 3), (2, 4), (2, 5), (2, 12), (3, 3),
               (3, 4), (3, 5), (3, 13), (4, 12), (4, 13), (5, 3), (5, 12), (7, 0), (7, 10), (9, 1), (9, 10),
-              (10, 3), (10, 10), (11, 10), (11, 12)],
+              (10, 3), (10, 10), (11, 10), (11, 12),
+              (6, 3), (7, 3), (7, 4), (8, 4),                     # Ngozumpa lower debris tongue + tongue end
+              (8, 5), (8, 10), (8, 11), (7, 12), (8, 12), (9, 11), (10, 9), (10, 11),  # 20 glaciers: Dzongla, Nuptse,
+              (11, 5), (11, 7)],                                  #   Lhotse, Duwo, Ombigaichain; Phortse, Pangboche
 }
+# Villages in or at the edge of a square (approximate positions), kept for later change tracking.
+PLACES = {(6, 8): "Gorak Shep", (7, 3): "Gokyo", (7, 4): "Thangnak", (7, 8): "Lobuche", (8, 4): "Na",
+          (9, 4): "Machhermo", (9, 8): "Pheriche, Dingboche", (9, 10): "Chukhung", (10, 1): "Lungden",
+          (11, 5): "Phortse", (11, 7): "Pangboche"}
+REVIEWER = {"krisha": "siddhi", "kavya": "snehi"}
+
+
+def labeller(r, c, split):
+    """Krisha: the west (Gokyo, Ngozumpa, Bhote Koshi) and all val squares; Kavya: Khumbu, Imja, Lhotse, Ama Dablam."""
+    return "krisha" if c <= 6 or split == "val" else "kavya"
 
 LABEL_QML = """<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>
 <qgis version="3.44" styleCategories="Symbology">
@@ -83,13 +107,13 @@ def read_layer(path, table):
         con.close()
 
 
-def add_layer(con, table, columns, rows):
-    """Create a MultiPolygon feature table registered in the GeoPackage, and insert rows (geom, *values)."""
+def add_layer(con, table, columns, rows, gtype="MULTIPOLYGON"):
+    """Create a feature table registered in the GeoPackage, and insert rows (geom, *values)."""
     cols = "".join(f", {n} {t}" for n, t in columns)
-    con.execute(f'create table "{table}" (fid INTEGER PRIMARY KEY AUTOINCREMENT, geom MULTIPOLYGON{cols})')
+    con.execute(f'create table "{table}" (fid INTEGER PRIMARY KEY AUTOINCREMENT, geom {gtype}{cols})')
     con.execute("insert into gpkg_contents (table_name, data_type, identifier, srs_id) values (?, 'features', ?, ?)",
                 (table, table, SRS))
-    con.execute("insert into gpkg_geometry_columns values (?, 'geom', 'MULTIPOLYGON', ?, 0, 0)", (table, SRS))
+    con.execute("insert into gpkg_geometry_columns values (?, 'geom', ?, ?, 0, 0)", (table, gtype, SRS))
     marks = ", ".join("?" * (len(columns) + 1))
     names = ", ".join(["geom"] + [n for n, _ in columns])
     con.executemany(f'insert into "{table}" ({names}) values ({marks})',
@@ -160,16 +184,63 @@ def setup(year, from_year):
     print(f"-> {out} (copied from {src.name})")
 
 
-def build(year):
-    s2 = s2_file(year)
-    date = s2.stem[3:]
-    drawing = LABEL_DIR / f"labels_{year}.gpkg"
-    with rasterio.open(s2) as s:
-        profile, valid = s.profile, s.read(2) > 0          # B03 > 0: pixel has data
-    shape, transform = valid.shape, profile["transform"]
-    tiles = pd.read_csv(TILES_CSV)
+def split_files(year):
+    """One drawing file per labeller (only their squares in the 'squares' layer) and an empty review file each."""
+    src = LABEL_DIR / f"labels_{year}.gpkg"
+    if not src.exists():
+        raise SystemExit(f"{src} not found - run setup first")
+    with rasterio.open(s2_file(year)) as s:
+        transform, shape = s.transform, (s.height, s.width)
+    tiles = tiles_frame()
     check_tiles(tiles, shape)
+    outs = [LABEL_DIR / f"{kind}_{year}_{who}.gpkg" for who in REVIEWER for kind in ("labels", "review")]
+    if any(o.exists() for o in outs):
+        raise SystemExit("per-labeller files already exist - not overwriting anyone's drawing or notes")
+    tiles.to_csv(TILES_CSV, index=False)
+    print(f"-> {TILES_CSV} ({tiles.split.value_counts().to_dict()})")
 
+    for who in REVIEWER:
+        mine = [(s, r, c) for s, sq in SQUARES.items() for r, c in sq if labeller(r, c, s) == who]
+        out = LABEL_DIR / f"labels_{year}_{who}.gpkg"
+        shutil.copyfile(src, out)
+        con = sqlite3.connect(out)
+        try:
+            con.execute('drop table "squares"')
+            con.execute("delete from gpkg_geometry_columns where table_name = 'squares'")
+            con.execute("delete from gpkg_contents where table_name = 'squares'")
+            add_layer(con, "squares", [("row", "INTEGER"), ("col", "INTEGER"), ("split", "TEXT"), ("name", "TEXT"),
+                                       ("labeller", "TEXT"), ("reviewer", "TEXT"), ("place", "TEXT")],
+                      [(square_box(transform, r, c), r * TILE, c * TILE, s, f"{r},{c}", who, REVIEWER[who],
+                        PLACES.get((r, c), "")) for s, r, c in mine])
+            con.commit()
+            print(f"-> {out.name}: {len(mine)} squares, integrity", con.execute("pragma integrity_check").fetchone()[0])
+        finally:
+            con.close()
+
+        review = LABEL_DIR / f"review_{year}_{who}.gpkg"
+        shutil.copyfile(src, review)                       # copy for the GeoPackage system tables, then empty it
+        con = sqlite3.connect(review)
+        try:
+            for (t,) in con.execute("select table_name from gpkg_contents").fetchall():
+                con.execute(f'drop table "{t}"')
+                con.execute("delete from gpkg_geometry_columns where table_name = ?", (t,))
+                con.execute("delete from gpkg_contents where table_name = ?", (t,))
+            for (t,) in con.execute("select name from sqlite_master where sql like 'CREATE VIRTUAL TABLE%'").fetchall():
+                con.execute(f'drop table "{t}"')            # spatial index (also drops its _node/_parent/_rowid)
+            con.execute("delete from gpkg_extensions where table_name is not null")
+            con.execute("delete from gpkg_ogr_contents")
+            add_layer(con, "notes", [("square", "TEXT"), ("problem", "TEXT"), ("status", "TEXT")], [], gtype="POINT")
+            con.commit()
+        finally:
+            con.close()
+        con = sqlite3.connect(review)
+        con.execute("vacuum")
+        print(f"-> {review.name}: empty notes layer for {REVIEWER[who]}, integrity",
+              con.execute("pragma integrity_check").fetchone()[0])
+        con.close()
+
+
+def rasterize_drawing(drawing, shape, transform):
     glacier = read_layer(drawing, "glaciers")
     unsure = read_layer(drawing, "unsure")
     y = np.zeros(shape, "uint8")
@@ -177,6 +248,32 @@ def build(year):
         y = rasterize([(g, 1) for g in glacier], out_shape=shape, transform=transform, fill=0, dtype="uint8")
     if unsure:
         y[rasterize([(g, 1) for g in unsure], out_shape=shape, transform=transform, dtype="uint8") == 1] = IGNORE
+    print(f"   {drawing.name}: {len(glacier)} glacier and {len(unsure)} unsure polygons")
+    return y
+
+
+def build(year):
+    s2 = s2_file(year)
+    date = s2.stem[3:]
+    with rasterio.open(s2) as s:
+        profile, valid = s.profile, s.read(2) > 0          # B03 > 0: pixel has data
+    shape, transform = valid.shape, profile["transform"]
+    tiles = pd.read_csv(TILES_CSV)
+    check_tiles(tiles, shape)
+
+    split_drawings = {who: LABEL_DIR / f"labels_{year}_{who}.gpkg" for who in REVIEWER}
+    if any(p.exists() for p in split_drawings.values()):
+        missing = [p.name for p in split_drawings.values() if not p.exists()]
+        if missing:
+            raise SystemExit(f"missing {missing}")
+        y = np.full(shape, IGNORE, "uint8")
+        for who, path in split_drawings.items():
+            yw = rasterize_drawing(path, shape, transform)
+            for r, c, s in tiles[["row", "col", "split"]].itertuples(index=False):
+                if labeller(r // TILE, c // TILE, s) == who:
+                    y[r:r + TILE, c:c + TILE] = yw[r:r + TILE, c:c + TILE]
+    else:
+        y = rasterize_drawing(LABEL_DIR / f"labels_{year}.gpkg", shape, transform)
 
     inside = np.zeros(shape, bool)
     for r, c in tiles[["row", "col"]].itertuples(index=False):
@@ -202,8 +299,7 @@ def build(year):
     with rasterio.open(out) as d:
         same = d.crs == profile["crs"] and d.transform.almost_equals(transform) and d.shape == shape
     vals = set(np.unique(y).tolist())
-    print(f"-> {out.name}: same grid as {s2.name}: {same}; values {sorted(vals)}; "
-          f"{len(glacier)} glacier and {len(unsure)} unsure polygons")
+    print(f"-> {out.name}: same grid as {s2.name}: {same}; values {sorted(vals)}")
     for split, grp in tiles.groupby("split"):
         cut = np.concatenate([y[r:r + TILE, c:c + TILE].ravel() for r, c in grp[["row", "col"]].itertuples(index=False)])
         lab = cut != IGNORE
@@ -215,11 +311,11 @@ def build(year):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
-    p.add_argument("command", choices=["setup", "build"])
+    p.add_argument("command", choices=["setup", "split", "build"])
     p.add_argument("--year", type=int, default=2022)
     p.add_argument("--from", dest="from_year", type=int, help="setup: copy this year's drawing instead of the inventory")
     a = p.parse_args()
-    setup(a.year, a.from_year) if a.command == "setup" else build(a.year)
+    {"setup": lambda: setup(a.year, a.from_year), "split": lambda: split_files(a.year), "build": lambda: build(a.year)}[a.command]()
 
 
 if __name__ == "__main__":

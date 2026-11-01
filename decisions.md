@@ -152,22 +152,53 @@ Open items still need a decision from the team (see bottom).
 
 ## Part 3 – labels and training squares
 
-### 18. Label 48 squares, split by glacier (2026-10-18)
-- Labels are drawn only inside 48 squares of 256 × 256 px (2.56 km), not over the whole scene. Kavya's
+### 18. Label 54 squares, split by glacier (2026-10-18, tongue ends added 2026-10-27)
+- Labels are drawn only inside 54 squares of 256 × 256 px (2.56 km), not over the whole scene. Kavya's
   training reads squares from `tiles.csv`; everything outside them is 255 (ignore).
 - **Split by glacier, so the model is tested on glaciers it never saw:**
-  - test (15): all of Khumbu and Imja/Lhotse Shar, so the whole of each glacier is in the test set;
+  - test (17): all of Khumbu and Imja/Lhotse Shar, including both tongue ends, so the whole of each glacier is in the test set;
   - val (6): Changri Shar/Nup and Lobuche;
-  - train (27): Ngozumpa (10, tongue + basin), Ama Dablam (3), plus the squares with the most off-glacier snow,
+  - train (31): Ngozumpa (14, basin + whole debris tongue + tongue end), Ama Dablam (3), plus the squares with the most off-glacier snow,
     lakes, terrain shadow and debris, 2 rock/valley squares and 3 ordinary mixed squares.
   - No train square contains any part of a test or val glacier.
 - The splits have a similar mix (glacier ~40–52%, debris ~29–40%).
+- 2026-10-27: 6 squares added after a review found that the Khumbu and Ngozumpa tongue ends fell outside the
+  first 48: the tips cover < 10% of their squares, which the first selection required. Tongue ends are where area
+  change happens and where mapping is hardest, so test needs Khumbu's (8,7 / 8,8) and train needs Ngozumpa's
+  (6,3 / 7,3 / 7,4 / 8,4). The other debris tongue ends (Imja, Changri, Lobuche, Ama Dablam) were already included.
 - Squares with up to 1% S2 no-data pixels are allowed. The two Khumbu/Imja squares have only 4–8 such pixels,
   which the loader ignores.
 - Drawing file `labels/labels_<year>.gpkg` starts from the corrected inventory outlines and has an `unsure` layer (→ 255).
   `make_labels.py build` also sets S2 no data and mask cloud / cloud shadow to 255. Terrain shadow stays labelled.
 - 2016 (for the Siamese network) will be made by copying the finished 2022 drawing
-  (`setup --year 2016 --from 2022`) and moving only edges that clearly changed.
+  (`setup --year 2016 --from 2022`) and moving only edges that clearly changed. *Changed by item 19.*
+
+### 19. 20 glaciers and 76 squares; labelling split between two people (2026-10-31)
+- After the 28 Oct mentor meeting the study grows from 6 to **20 glaciers**. The 14 new ones were picked from the
+  inventory (> ~0.4 km², not cut by the study-area edge) for villages or vegetation near or below them, so their
+  surroundings can be tracked later: Nuptse, Lhotse (RGI spells it "Lothse"), Duwo, Ombigaichain, Amphu Laptse,
+  Cholo, Cholotse, and the unnamed glaciers fid 48 (Gokyo), 49 (Na), 60 (Machhermo), 61 (Lungden),
+  72 (Dzongla), 89 (Lobuche village) and 96 (Gorak Shep). Lhotse Nup was dropped: its main square (7,11) also holds
+  part of Khumbu (test).
+- **22 squares added, 76 in total: train 41, val 10, test 25.**
+  - test: Khumbu, Imja/Lhotse Shar, Amphu Laptse, and fid 96, 48, 49, 60, 61 (small clean glaciers, so test is not
+    only debris tongues);
+  - val: Changri Shar/Nup, Lobuche, Cholo, Cholotse, fid 89;
+  - train: Ngozumpa, Ama Dablam, Nuptse, Lhotse, Duwo, Ombigaichain, fid 72.
+  - 6 of the new squares are villages / vegetation (NDVI > 0.3 on 24 Oct 2022): Machhermo and Lungden (test),
+    Pheriche/Dingboche (val), Phortse and Pangboche (train). `PLACES` in `make_labels.py` lists the villages.
+  - Still no train square contains any part of a test or val glacier. The other direction is not clean:
+    test squares hold parts of Nuptse (22 % of it) and Lhotse (15 %), which are train, and 6,8 (test) holds part of
+    Changri (val). Kavya leaves those glaciers' pixels out of test scoring; no squares are redrawn.
+- **Labelling split** (`labeller()` in `make_labels.py`): Krisha draws the west (column ≤ 6) and all val squares (40),
+  Kavya the rest (36). Siddhi reviews Krisha's squares, Snehi reviews Kavya's. `make_labels.py split` makes one
+  drawing file per labeller (copies of `labels_2022.gpkg`, only their squares in the `squares` layer) and an empty
+  `notes` file per reviewer, and rewrites `tiles.csv` with all 76 squares. `build` takes each square from its
+  labeller's file. Progress is kept in the "Label Tracker 2022" sheet. Deadline Thu 5 Nov 2026.
+- **2016 is drawn fresh on the 25 test squares**, not copied from 2022 (replaces the last point of item 18): a copy
+  would carry the 2022 errors over, so we could not measure whether errors repeat between years.
+- **Two-person agreement:** after the break, Siddhi redraws 8 of Kavya's test squares (5,10 6,11 7,8 8,7 8,8 8,13
+  9,12 9,13) and Snehi 5 of Krisha's (7,2 8,2 9,2 9,3 10,2), blind (without seeing the first drawing).
 
 
 ## Open – needs a team decision
