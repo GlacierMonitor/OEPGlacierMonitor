@@ -1,4 +1,4 @@
-"""Random Forest baseline: per-pixel classifier on the same 9 inputs as the U-Net.
+"""Random Forest baseline: per-pixel classifier on the same inputs as the U-Net.
 
 Usage:
     venv/Scripts/python rf_baseline.py --s2 S2_20221024.tif --dem CopDEM_GLO30_UTM45N.tif \
@@ -21,7 +21,7 @@ import joblib
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 
-from data import CHANNELS, IGNORE, TILE, load_stack, read_label, read_tiles
+from data import CHANNELS, IGNORE, TERRAIN, TILE, load_stack, read_label, read_mask, read_tiles, select_channels
 from model import confusion, iou
 from predict import PIXEL_KM2, write
 
@@ -73,6 +73,8 @@ def main():
     p.add_argument("--trees", type=int, default=200)
     p.add_argument("--min-leaf", type=int, default=5, help="min_samples_leaf (limits overfitting)")
     p.add_argument("--mask-cloud", action="store_true", help="ignore SCL cloud pixels (only reliable 2022+)")
+    p.add_argument("--masks", help="Part 2 masks folder (mask_YYYYMMDD.tif): ignore cloud, cloud shadow, no data")
+    p.add_argument("--no-terrain", action="store_true", help="leave out elevation and slope (7 inputs)")
     p.add_argument("--ndsi", type=float, default=0.4, help="NDSI threshold for the baseline comparison")
     p.add_argument("--seed", type=int, default=0)
     args = p.parse_args()
@@ -80,7 +82,17 @@ def main():
     out = Path(args.out); out.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(args.seed)
 
-    x, valid, profile = load_stack(args.s2, args.dem, args.mask_cloud)
+    channels = [c for c in CHANNELS if not (args.no_terrain and c in TERRAIN)]
+
+    def load(f):
+        x, valid, profile = load_stack(f, args.dem, args.mask_cloud)
+        if args.masks:
+            valid &= ~read_mask(f, args.masks, profile)
+        return x, valid, profile
+
+    x, valid, profile = load(args.s2)
+    ndsi = x[CHANNELS.index("NDSI")].copy()
+    x = select_channels(x, channels)
     y = read_label(args.label, valid, profile)
     tiles = read_tiles(args.tiles, valid.shape)
     train = tile_region(tiles, "train", valid.shape)
@@ -95,7 +107,8 @@ def main():
                                 random_state=args.seed)
     rf.fit(fx, fy)
     print(f"fitted {args.trees} trees in {time.time() - t0:.0f}s")
-    joblib.dump({"rf": rf, "channels": CHANNELS, "mask_cloud": args.mask_cloud, "s2": str(args.s2)},
+    joblib.dump({"rf": rf, "channels": channels, "mask_cloud": args.mask_cloud, "masks": args.masks,
+                 "s2": str(args.s2)},
                 out / "rf.joblib", compress=3)
 
     t0 = time.time()
@@ -106,8 +119,7 @@ def main():
     write(out / f"{stem}_mask.tif", mask, profile)
     print(f"{stem}: glacier {(mask == 1).sum() * PIXEL_KM2:.2f} km2, mapped in {time.time() - t0:.0f}s")
 
-    scores = {"importance": dict(zip(CHANNELS, np.round(rf.feature_importances_, 4).tolist()))}
-    ndsi = x[CHANNELS.index("NDSI")]
+    scores = {"importance": dict(zip(channels, np.round(rf.feature_importances_, 4).tolist()))}
     for split in ("val", "test"):
         region = tile_region(tiles, split, valid.shape)
         if not region.any():
@@ -122,8 +134,8 @@ def main():
     ref = Path(args.s2).resolve()
     files = sorted({f for pat in args.predict for f in (glob.glob(pat) or [pat]) if Path(f).resolve() != ref})
     for f in files:
-        xf, vf, pf = load_stack(f, args.dem, args.mask_cloud)
-        mf, pr8 = to_rasters(predict_scene(rf, xf, vf), vf)
+        xf, vf, pf = load(f)
+        mf, pr8 = to_rasters(predict_scene(rf, select_channels(xf, channels), vf), vf)
         write(out / f"{Path(f).stem}_prob.tif", pr8, pf)
         write(out / f"{Path(f).stem}_mask.tif", mf, pf)
         print(f"{Path(f).stem}: glacier {(mf == 1).sum() * PIXEL_KM2:.2f} km2")
