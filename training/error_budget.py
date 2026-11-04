@@ -20,8 +20,11 @@ The decade trend is a least-squares slope per run over the years kept (--exclude
 example, the snow-covered 2025 scene), then the mean and sd over runs.
 
 Not in this budget: label error, and any bias that every run shares (all runs trained on the same label).
-Those need the second drawing and the 2016 test squares. Off-glacier ground (further than --buffer pixels
-from any outline) should map as no glacier in every year; its mapped area is written as a control.
+Label error comes from agreement.py (the blind redraw); a shared bias needs the 2016 test squares.
+Off-glacier ground (further than --buffer pixels from any outline) should map as no glacier in every year;
+its mapped area is written as a control. "Any outline" means every inventory glacier, not only the study
+glaciers: give --all-glaciers the full glacier_ids.py raster when --glaciers holds only the study glaciers
+(make_labels.py ids writes the 20 study glaciers only), or the other glaciers count as off-glacier ground.
 
 Writes <out>_areas.csv (run, year, glacier, area), <out>_budget.csv (glacier-year sds), <out>_change.csv
 (year pairs: consecutive years and first-last), <out>_trend.csv and <out>_offglacier.csv.
@@ -60,7 +63,17 @@ def read_areas(args, study):
         px_km2 = abs(src.transform.a * src.transform.e) / 1e6
     n = int(ids.max()) + 1
     pixels = np.bincount(ids.ravel(), minlength=n)
-    far = ndimage.distance_transform_edt(ids == 0) > args.buffer          # off-glacier control ground
+    if args.all_glaciers:
+        with rasterio.open(args.all_glaciers) as src:
+            if not (src.crs == grid[0] and src.transform.almost_equals(grid[1]) and src.shape == grid[2]):
+                raise SystemExit(f"{args.all_glaciers} is not on the glacier-ID grid")
+            any_ice = src.read(1) > 0
+    else:
+        any_ice = ids > 0
+        if len(np.unique(ids)) - 1 < 50:
+            print(f"  warning: {args.glaciers} holds only {len(np.unique(ids)) - 1} glaciers; the off-glacier "
+                  "control will include the other glaciers - give --all-glaciers the full inventory raster")
+    far = ndimage.distance_transform_edt(~any_ice) > args.buffer          # off-glacier control ground
     rows, off = [], []
     runs = sorted(p.parent for p in Path(args.runs).rglob("scores.json"))
     for run in runs:
@@ -142,6 +155,8 @@ def main():
     p.add_argument("--exclude-years", nargs="*", type=int, default=[], help="left out of change and trend")
     p.add_argument("--max-nodata", type=float, default=5.0, help="%% no data above which an area is left empty")
     p.add_argument("--buffer", type=int, default=30, help="off-glacier control: pixels from any outline")
+    p.add_argument("--all-glaciers", help="glacier-ID raster of every inventory glacier (glacier_ids.py), for the "
+                   "off-glacier control; default: --glaciers")
     p.add_argument("--out", required=True, help="output path prefix")
     args = p.parse_args()
 
