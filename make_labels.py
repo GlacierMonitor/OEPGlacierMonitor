@@ -20,7 +20,8 @@ build writes label_<year>.tif on the year's S2 grid: 1 glacier, 0 not glacier, 2
 If the per-labeller files exist, each square is taken from its labeller's file; otherwise from labels_<year>.gpkg.
 ids writes glacier_ids.tif (one value per study glacier, 0 elsewhere) + glacier_ids.csv (value, glacier_id,
   glacier_name) for training/glacier_areas.py, from the same outlines as build (labels_<year>.gpkg outside the squares).
-redraw writes labels_<year>_redraw_<who>.gpkg: inventory outlines, only that person's REDRAW squares.
+redraw writes labels_<year>_redraw_<who>.gpkg: the same starting file the first labellers got (labels_<year>.gpkg:
+  glaciers + unsure as before the split), with only that person's REDRAW squares.
 255 = outside the squares, 'unsure' polygons, S2 no data, and cloud / cloud shadow from masks/mask_<date>.tif.
 Terrain shadow stays labelled (shadowed ice is still glacier).
 """
@@ -70,8 +71,8 @@ PLACES = {(6, 8): "Gorak Shep", (7, 3): "Gokyo", (7, 4): "Thangnak", (7, 8): "Lo
           (9, 4): "Machhermo", (9, 8): "Pheriche, Dingboche", (9, 10): "Chukhung", (10, 1): "Lungden",
           (11, 5): "Phortse", (11, 7): "Pangboche"}
 REVIEWER = {"krisha": "siddhi", "kavya": "snehi"}
-# Blind redraw for the two-person agreement number (decisions.md 19): test squares redrawn from the inventory
-# outlines by someone who has not seen the first drawing.
+# Blind redraw for the two-person agreement number (decisions.md 19): test squares redrawn from the same starting
+# outlines as the first drawing (labels_<year>.gpkg) by someone who has not seen the first drawing.
 REDRAW = {"siddhi": [(5, 10), (6, 11), (7, 8), (8, 7), (8, 8), (8, 13), (9, 12), (9, 13)],
           "snehi": [(7, 2), (8, 2), (9, 2), (9, 3), (10, 2)]}
 # The 20 study glaciers (decisions.md 19) by RGI id, with the names written to glacier_ids.csv / results.csv.
@@ -273,7 +274,13 @@ def split_files(year):
 
 
 def redraw_files(year):
-    """Fresh drawing files from the inventory outlines, holding only each blind redrawer's squares."""
+    """Blind-redraw files holding only each redrawer's squares, copied from labels_<year>.gpkg: the same starting
+    outlines (and pre-split unsure polygons) the first labellers got in split_files. Starting from the raw inventory
+    instead would make the two drawings differ wherever the team edited before the split (e.g. 0.91 km2 of Imja Tsho
+    already cut in square 9,12), and that difference would be counted as labeller disagreement."""
+    src = LABEL_DIR / f"labels_{year}.gpkg"
+    if not src.exists():
+        raise SystemExit(f"{src} not found - run setup first (the redraw starts from the same file as the first drawing)")
     with rasterio.open(s2_file(year)) as s:
         transform = s.transform
     outs = {who: LABEL_DIR / f"labels_{year}_redraw_{who}.gpkg" for who in REDRAW}
@@ -281,14 +288,16 @@ def redraw_files(year):
         raise SystemExit("redraw files already exist - not overwriting anyone's drawing")
     split = {(r, c): s for s, sq in SQUARES.items() for r, c in sq}
     for who, out in outs.items():
-        shutil.copyfile(INVENTORY, out)
+        shutil.copyfile(src, out)
         con = sqlite3.connect(out)
         try:
-            add_layer(con, "unsure", [("note", "TEXT")], [])
+            con.execute('drop table "squares"')
+            con.execute("delete from gpkg_geometry_columns where table_name = 'squares'")
+            con.execute("delete from gpkg_contents where table_name = 'squares'")
             add_layer(con, "squares", [("row", "INTEGER"), ("col", "INTEGER"), ("split", "TEXT"), ("name", "TEXT")],
                       [(square_box(transform, r, c), r * TILE, c * TILE, split[r, c], f"{r},{c}") for r, c in REDRAW[who]])
             con.commit()
-            print(f"-> {out.name}: {len(REDRAW[who])} squares from the inventory outlines, integrity",
+            print(f"-> {out.name}: {len(REDRAW[who])} squares, starting outlines from {src.name}, integrity",
                   con.execute("pragma integrity_check").fetchone()[0])
         finally:
             con.close()
