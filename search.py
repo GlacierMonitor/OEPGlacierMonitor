@@ -123,7 +123,7 @@ def preview(catalog, date, row=None):
         fig.suptitle(f"cloud (SCL) {row['cloud_%']}%   cloud (NDSI-corrected) {row['cloud_ndsi_%']}%   "
                      f"cover {row['cover_%']}%   snow hint {row['snow_%_hint']}%   "
                      f"baseline {', '.join(baselines)}")
-    fig.tight_layout()
+    fig.tight_layout(rect=(0, 0, 1, 0.95))   # leave room so the suptitle does not overlap the panel titles
     path = C.PREVIEW_DIR / f"{date}.png"
     fig.savefig(path, dpi=80)
     plt.close(fig)

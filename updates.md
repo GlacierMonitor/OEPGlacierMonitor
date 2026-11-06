@@ -1,5 +1,27 @@
 # GlacierMonitor Part 1 – Progress updates
 
+## 2026-10-18 – Labels set up
+
+- 48 training squares chosen (`decisions.md` item 18). `make_labels.py setup` wrote `GlacierMonitor/labels/tiles.csv`
+  and the drawing file `labels_2022.gpkg` (layers: glaciers, unsure, squares).
+- Tested `make_labels.py build` on the unedited outlines, in a scratch folder: same grid as S2_20221024, values 0/1/255,
+  and Kavya's `read_label` + `read_tiles` both accept it.
+- Next: draw the 2022 label in QGIS (one val square first as a check), then build `label_2022.tif` and hand it to Kavya with `tiles.csv`.
+
+## 2026-10-14 – Glacier inventory received and corrected
+
+### Done
+- Snehi delivered `glaciers.gpkg` and the CSV (RGI 7.0, Region 15). Checked: EPSG:32645, lines up with S2_20221024,
+  all 7 named glaciers present, debris filled (Khumbu, Ngozumpa and Imja are heavy).
+- Corrected on a copy (`decisions.md` item 17): `edge` recomputed from the geometry (18 changed), sliver fid 148 deleted,
+  and the Ama Dablam spelling fixed. The edge glaciers stay cut to the study area.
+- Final files: `GlacierMonitor/inventory/glaciers.gpkg` + `glaciers.csv`, with 252 glaciers, 42 > 1 km² and 32 edge.
+  Snehi's originals are kept alongside.
+
+### Next
+- Upload the corrected `glaciers.gpkg` and `glaciers.csv` to Drive (replacing Snehi's) and tell the team.
+- Labels: 2022 first, starting from these outlines, then 2016 as an edited copy. Then `tiles.csv`.
+
 ## 2026-10-10 – Part 2 started: cloud and shadow masks (approach A)
 
 ### Done
