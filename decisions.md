@@ -195,6 +195,10 @@ Open items still need a decision from the team (see bottom).
   drawing file per labeller (copies of `labels_2022.gpkg`, only their squares in the `squares` layer) and an empty
   `notes` file per reviewer, and rewrites `tiles.csv` with all 76 squares. `build` takes each square from its
   labeller's file. Progress is kept in the "Label Tracker 2022" sheet. Deadline Thu 5 Nov 2026.
+- **Fresh snow** (agreed by Krisha and Kavya, 2026-11-03): the 24 Oct 2022 image has fresh snow on the high slopes, often
+  1–2.5 km² per square outside the inventory outlines. Snow-covered ground is added to a glacier only where it shows
+  crevasses or is a tongue joined to the glacier; smooth snow alone is not enough. When in doubt it is left out or drawn
+  as unsure. Reviewers do not flag smooth snow left outside an outline.
 - **2016 is drawn fresh on the 25 test squares**, not copied from 2022 (replaces the last point of item 18): a copy
   would carry the 2022 errors over, so we could not measure whether errors repeat between years.
 - **Two-person agreement:** after the break, Siddhi redraws 8 of Kavya's test squares (5,10 6,11 7,8 8,7 8,8 8,13
