@@ -1,5 +1,52 @@
 # GlacierMonitor Part 1 – Progress updates
 
+## 2026-11-12 / 13 – 2022 label reviewed, approach B composites, first real training runs
+
+### Labels (2022, 76 squares)
+- **Kavya's 36 squares:** drawn (AI draft + LLM council + hand review), reviewed by Snehi, fixes uploaded on 12 Nov.
+  Snehi still has to re-check the changed squares and tick Final OK (2 of 36 done so far).
+- **Krisha's 40 squares:** reviewed by Kavya (Siddhi's part, from 12 Nov), with 44 notes in
+  `labels/review_2022_krisha.gpkg`. Krisha's fixes were checked note by note: **39 of 40 are Final OK**. 9,7 is reopened
+  (the glacier kept next to the new lower line still looks like the ground that was cut).
+- **Team rules from the review** (agreed by Kavya and Krisha; Snehi to confirm by Sun 15 Nov, then they go into `decisions.md`):
+  1. Steep faces: always-white faces of 35° or more stay out, and test squares are scored both ways.
+  2. Kept-edge band: next to a moved edge, judged on the least-snow image.
+  3. White margins outside an outline: added only as a rock-free notch tip with glacier on 3 sides, else left out or unsure.
+  4. Small vanished inventory glaciers: white share below 50 % of the autumn images means not glacier, otherwise unsure.
+  5. Spillway Lake: stays unsure.
+- **Blind redraw:** Krisha redrew 8 of Kavya's test squares. Agreement IoU 0.967 (label SD 0.12 km² per square).
+  Most of the difference is 8,13, which Krisha's judgement adds to Imja. Both drawings start from the same RGI outlines,
+  so the agreement mostly reflects that shared start. Snehi's redraw of Krisha's 5 test squares is still to do.
+- **Still missing:** `glacier_ids.tif`/`.csv` on Drive (task 3.6).
+
+### Approach B (Earth Engine composites)
+- `gee_export.py` (PR #16) builds yearly Oct-Nov median composites from COPERNICUS/S2_HARMONIZED, with Cloud Score+ ≥ 0.6,
+  6 bands, on exactly the approach-A grid.
+- All 10 years (2016-2025) are exported and checked (same grid, no gaps), on Drive in `raw/s2gee/` with `s2gee_counts.csv`.
+- `run_all.py --prep A B` (PR #17, stacked on #12) puts approach B into the run matrix.
+
+### First training on real labels (provisional)
+- Labels: Kavya's file of 12 Nov plus Krisha's file **before** her fixes. Test squares were left out of `tiles.csv`,
+  so no test score exists yet.
+- 21 runs per approach, about 32 min each on the RTX 4050. Validation IoU, mean of 5 seeds:
+
+  | Method | A (single date) | B (composite) |
+  |---|---|---|
+  | U-Net, terrain on | 0.70 | 0.69 |
+  | U-Net, terrain off | 0.69 | 0.70 |
+  | RF, terrain on | 0.55 | 0.59 |
+  | RF, terrain off | 0.51 | 0.54 |
+  | NDSI > 0.4 | 0.40 | 0.39 |
+
+- Validation also decides when training stops, so these are optimistic. The real numbers come once, from the test
+  squares, after the labels are final.
+
+### Next
+- Snehi: re-check and Final OK on Kavya's squares; redraw of Krisha's 5 test squares; rules confirmation.
+- Krisha: 9,7; upload `glacier_ids`; review PR #12 (then #17 can follow).
+- Then: build the final `label_2022.tif` and run the full matrix (A and B, `--all-years`), score the test squares once,
+  and run the error budget.
+
 ## 2026-10-18 – Labels set up
 
 - 48 training squares chosen (`decisions.md` item 18). `make_labels.py setup` wrote `GlacierMonitor/labels/tiles.csv`
