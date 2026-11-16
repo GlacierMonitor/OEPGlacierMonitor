@@ -151,6 +151,44 @@ Remove `--dry-run` to start. Skipping looks only at which files exist, so use a 
 or tiles.csv changes. `random_split.py` makes the random-split control: the same squares and counts per
 split, dealt out at random with the run's seed.
 
+With `--all-years`, the NDSI baseline also maps every year (`ndsi_map.py`, same mask format as `predict.py`), so
+all three methods get an area time series.
+
+## Error budget (error_budget.py)
+
+```
+venv\Scripts\python error_budget.py --runs runs\matrix --glaciers glacier_ids.tif --lookup glacier_ids.csv ^
+    --all-glaciers inventory_ids.tif --exclude-years 2025 --out runs\matrixudget
+```
+
+Reads the year maps of every run made with `run_all.py --all-years` and works out the area of each study glacier
+in each year for each run. `--glaciers`/`--lookup` are the 20-glacier files from `make_labels.py ids` (all their
+glaciers are studied); with the full inventory raster from `glacier_ids.py` instead, pick the study glaciers with
+`--values` or `--names` (default: named outlines of at least 1 km2). The spread between runs is split into seed,
+one part per factor that varies in the matrix (method, terrain, cloud, split, preprocessing) and the total. The
+same split is done for the change between years, which gives the minimum detectable change (MDC95 = 1.96 x SD of
+the change) and the correlation of errors between years. It also fits a trend per run, and reports the glacier
+area mapped on ground more than 300 m from any outline as a control. That control needs every inventory glacier:
+give `--all-glaciers` the `glacier_ids.py` raster (`inventory_ids.tif` above) when `--glaciers` holds only the 20
+study glaciers, or the other 232 glaciers count as off-glacier ground (on the stand-in runs: about 350 km2
+instead of 11-23 km2). Writes `budget_areas.csv`, `_budget.csv`, `_change.csv`, `_trend.csv` and
+`_offglacier.csv`. Label error is not in this budget (see `agreement.py`), nor is any bias that all runs share.
+
+## Two-person agreement (agreement.py)
+
+```
+venv\Scripts\python agreement.py --first labels_2022_kavya.gpkg --redraw labels_2022_redraw_siddhi.gpkg ^
+    --s2 S2_20221024.tif --glaciers glacier_ids.csv --out runs\agreement\siddhi
+```
+
+Compares a first drawing with the blind redraw of the same squares (the squares in the redraw file, from
+`make_labels.py redraw`). Pixels either person marked unsure are left out. Per square: each person's glacier area,
+the difference, IoU and the distance between the two edges (mean and 95th percentile, m). Per study glacier: the
+area each person gave it inside the squares, matched by `glacier_id`. The label SD of one drawing is
+sqrt(mean(d^2) / 2) over the squares, d being the difference between the two people; that is the label term
+of the error budget. Checked on a copy of the inventory drawing with every outline moved in by 20 m: edges
+20-25 m apart, IoU 0.93.
+
 Tested on 31 Oct on the real 2022 scene with a stand-in label (RGI outlines, not our labels, so the scores mean
 nothing yet). With 5 epochs a U-Net or RF run took about 1 min, most of it loading data. Reading a scene from a
 streamed Drive folder takes about 1.5 min the first time, so set `raw` and `masks` to "Available offline" first.

@@ -17,7 +17,8 @@ Every combination of these runs (each takes a list):
   --terrain  on off           off = --no-terrain (no elevation and slope)
   --cloud    ocm scl none     ocm = Part 2 masks (--masks), scl = SCL cloud (--mask-cloud), none
   --split    glacier random   random = random_split.py with the run's seed (the leakage control)
-  --all-years                 also map every S2 file into <run>/years (for the area time series)
+  --all-years                 also map every S2 file (for the area time series and error_budget.py):
+                              U-Net and NDSI into <run>/years, RF into <run>/model
 
 Each run gets <out>/<method>_terrain-<t>_cloud-<c>_split-<s>_seed<n>/ with run.log, model/ (weights, or the
 forest), the reference-year map and scores.json from score.py. A step whose output exists is skipped, so a
@@ -34,14 +35,21 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 
 
-def sh(cmd, log):
-    """Run one step, appending its output to log; stop the matrix on failure."""
+def sh(cmd, log, tries=2):
+    """Run one step, appending its output to log; retry once, then stop the matrix.
+
+    The retry is for rare crashes that are not our code (joblib's thread pool on Python 3.14 once failed
+    with "concurrent send_bytes() calls are not supported" while mapping a scene with the forest).
+    """
     cmd = [str(c) for c in cmd]
-    with open(log, "a", encoding="utf-8") as fh:
-        fh.write(f"\n$ {' '.join(cmd)}\n"); fh.flush()
-        rc = subprocess.run(cmd, cwd=HERE, stdout=fh, stderr=subprocess.STDOUT).returncode
-    if rc:
-        raise SystemExit(f"step failed (exit {rc}); see {log}")
+    for attempt in range(1, tries + 1):
+        with open(log, "a", encoding="utf-8") as fh:
+            fh.write(f"\n$ {' '.join(cmd)}\n"); fh.flush()
+            rc = subprocess.run(cmd, cwd=HERE, stdout=fh, stderr=subprocess.STDOUT).returncode
+        if not rc:
+            return
+        print(f"  step failed (exit {rc}, attempt {attempt}/{tries}); see {log}")
+    raise SystemExit(f"step failed (exit {rc}); see {log}")
 
 
 def plan(args):
@@ -116,7 +124,7 @@ def main():
     for i, r in enumerate(runs, 1):
         d = out / name(r); d.mkdir(exist_ok=True)
         log = d / "run.log"
-        if (d / "scores.json").exists() and (not args.all_years or r["method"] == "ndsi"
+        if (d / "scores.json").exists() and (not args.all_years
                                             or (d / "years" / "areas.csv").exists()
                                             or (d / "model" / "years.done").exists()):
             print(f"[{i}/{len(runs)}] {d.name}: done, skipped")
@@ -157,6 +165,8 @@ def main():
             ref_map = model / f"{ref.stem}_mask.tif"
         else:
             ref_map = None
+            if args.all_years and not (d / "years" / "areas.csv").exists():
+                sh([py, "ndsi_map.py", "--s2", *scenes, "--dem", dem, "--out", d / "years", *cloud], log)
 
         what = ["--pred", ref_map] if ref_map else ["--ndsi", "0.4"]
         score_cloud = {"ocm": ["--masks", mask_dir], "scl": ["--mask-cloud"], "none": []}[r["cloud"]]
