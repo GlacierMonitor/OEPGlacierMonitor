@@ -17,10 +17,14 @@ Every combination of these runs (each takes a list):
   --terrain  on off           off = --no-terrain (no elevation and slope)
   --cloud    ocm scl none     ocm = Part 2 masks (--masks), scl = SCL cloud (--mask-cloud), none
   --split    glacier random   random = random_split.py with the run's seed (the leakage control)
+  --prep     A B              A = single-date S2_YYYYMMDD.tif (default); B = Earth Engine composites
+                              S2GEE_YYYY.tif (gee_export.py) in raw/s2gee/ or the --data folder. B runs train,
+                              map and score on the composites; their cloud is already masked in Earth Engine,
+                              so B only runs with cloud 'none' (other --cloud values are skipped for B).
   --all-years                 also map every S2 file (for the area time series and error_budget.py):
                               U-Net and NDSI into <run>/years, RF into <run>/model
 
-Each run gets <out>/<method>_terrain-<t>_cloud-<c>_split-<s>_seed<n>/ with run.log, model/ (weights, or the
+Each run gets <out>/<method>_terrain-<t>_cloud-<c>_split-<s>_seed<n>[_prep-B]/ with run.log, model/ (weights, or the
 forest), the reference-year map and scores.json from score.py. A step whose output exists is skipped, so a
 stopped run carries on where it left off; delete a run folder to redo it. At the end `score.py collect`
 writes <out>/results_runs.csv, results_summary.csv (mean, sd and n over seeds) and results_glaciers.csv.
@@ -54,19 +58,22 @@ def sh(cmd, log, tries=2):
 
 def plan(args):
     runs = []
-    for method, cloud, split in itertools.product(args.methods, args.cloud, args.split):
-        if method == "ndsi":
-            seeds = args.seeds if split == "random" else [None]
-            runs += [dict(method=method, terrain="na", cloud=cloud, split=split, seed=s) for s in seeds]
-        else:
-            runs += [dict(method=method, terrain=t, cloud=cloud, split=split, seed=s)
-                     for t in args.terrain for s in args.seeds]
+    for prep in args.prep:
+        clouds = args.cloud if prep == "A" else ["none"]          # B: cloud masked in Earth Engine
+        for method, cloud, split in itertools.product(args.methods, clouds, args.split):
+            if method == "ndsi":
+                seeds = args.seeds if split == "random" else [None]
+                runs += [dict(method=method, terrain="na", cloud=cloud, split=split, seed=s, prep=prep) for s in seeds]
+            else:
+                runs += [dict(method=method, terrain=t, cloud=cloud, split=split, seed=s, prep=prep)
+                         for t in args.terrain for s in args.seeds]
     return runs
 
 
 def name(r):
     seed = "" if r["seed"] is None else f"_seed{r['seed']}"
-    return f"{r['method']}_terrain-{r['terrain']}_cloud-{r['cloud']}_split-{r['split']}{seed}"
+    prep = "" if r.get("prep", "A") == "A" else f"_prep-{r['prep']}"      # A keeps the old names (resumable)
+    return f"{r['method']}_terrain-{r['terrain']}_cloud-{r['cloud']}_split-{r['split']}{seed}{prep}"
 
 
 def main():
@@ -82,6 +89,7 @@ def main():
     p.add_argument("--terrain", nargs="+", default=["on", "off"], choices=["on", "off"])
     p.add_argument("--cloud", nargs="+", default=["ocm"], choices=["ocm", "scl", "none"])
     p.add_argument("--split", nargs="+", default=["glacier"], choices=["glacier", "random"])
+    p.add_argument("--prep", nargs="+", default=["A"], choices=["A", "B"])
     p.add_argument("--all-years", action="store_true", help="also map every S2 file")
     p.add_argument("--epochs", type=int, default=60)
     p.add_argument("--patience", type=int, default=15)
@@ -94,15 +102,21 @@ def main():
     pick = lambda sub: data / sub if (data / sub).exists() else data
     s2_dir, mask_dir = pick("raw/sentinel2"), data / "masks"
     dem = pick("raw/dem") / "CopDEM_GLO30_UTM45N.tif"
-    scenes = sorted(s2_dir.glob("S2_*.tif"))
+    scenes = sorted(s2_dir.glob("S2_*.tif"))                # S2_* does not match S2GEE_*
+    year = "".join(ch for ch in Path(args.label).stem if ch.isdigit())[:4]
     if args.ref:
         ref = Path(args.ref)
     else:
-        year = "".join(ch for ch in Path(args.label).stem if ch.isdigit())[:4]
         hits = [s for s in scenes if s.stem.startswith(f"S2_{year}")]
         if len(hits) != 1:
             raise SystemExit(f"found {len(hits)} S2_{year}*.tif in {s2_dir}; pass --ref")
         ref = hits[0]
+    gee_scenes, gee_ref = [], None
+    if "B" in args.prep:
+        gee_scenes = sorted(pick("raw/s2gee").glob("S2GEE_*.tif"))
+        gee_ref = next((s for s in gee_scenes if s.stem == f"S2GEE_{year}"), None)
+        if gee_ref is None:
+            raise SystemExit(f"--prep B needs S2GEE_{year}.tif in {pick('raw/s2gee')} (gee_export.py)")
     for f in [ref, dem, args.label, args.tiles] + ([args.glaciers, args.lookup] if args.glaciers else []):
         if not Path(f).exists():
             raise SystemExit(f"missing {f}")
@@ -113,13 +127,15 @@ def main():
 
     runs = plan(args)
     out = Path(args.out).resolve(); out.mkdir(parents=True, exist_ok=True)
-    print(f"{len(runs)} runs -> {out}  (reference scene {ref.name}, {len(scenes)} scenes)")
+    print(f"{len(runs)} runs -> {out}  (reference scene {ref.name}, {len(scenes)} scenes"
+          + (f"; B: {gee_ref.name}, {len(gee_scenes)} composites)" if gee_ref else ")"))
     if args.dry_run:
         for r in runs:
             print(" ", name(r))
         return
 
     py = sys.executable
+    ref_a, scenes_a = ref, scenes
     t_all = time.time()
     for i, r in enumerate(runs, 1):
         d = out / name(r); d.mkdir(exist_ok=True)
@@ -130,6 +146,7 @@ def main():
             print(f"[{i}/{len(runs)}] {d.name}: done, skipped")
             continue
         t0 = time.time()
+        ref, scenes = (gee_ref, gee_scenes) if r["prep"] == "B" else (ref_a, scenes_a)
         seed = 0 if r["seed"] is None else r["seed"]
         cloud = {"ocm": ["--masks", mask_dir], "scl": ["--mask-cloud"], "none": []}[r["cloud"]]
         terrain = ["--no-terrain"] if r["terrain"] == "off" else []
