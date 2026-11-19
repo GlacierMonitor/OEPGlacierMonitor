@@ -203,8 +203,40 @@ Open items still need a decision from the team (see bottom).
   would carry the 2022 errors over, so we could not measure whether errors repeat between years.
 - **Two-person agreement:** after the break, Siddhi redraws 8 of Kavya's test squares (5,10 6,11 7,8 8,7 8,8 8,13
   9,12 9,13) and Snehi 5 of Krisha's (7,2 8,2 9,2 9,3 10,2), blind (without seeing the first drawing).
+  *Changed by item 20: Krisha redrew Kavya's 8 squares instead of Siddhi.*
+
+### 20. Labelling rules from the 2022 review (agreed 2026-11-12, recorded 2026-11-19)
+Agreed by Kavya and Krisha. Snehi is away for exams until 21 Dec, so they are recorded as agreed by 2 of 3; Snehi can
+reopen any of them after 21 Dec. They apply to both labellers' squares.
+1. **Steep faces.** Faces of 35° or more that are white in nearly every October and touch a glacier stay outside the
+   outline (the inventory convention). The test squares are scored twice: as drawn, and with those pixels ignored.
+   In Kavya's test squares they cover 8.0 km² (6.8 % of the test area).
+2. **Kept-edge band.** Where an edge was moved, the glacier kept right next to the new edge is judged on the least-snow
+   October image: cut, keep or unsure. The band is frozen before any edit, and the test squares are scored both ways
+   (after the pass / band left out).
+3. **White margins outside an outline.** Added only as a rock-free notch tip with glacier on 3 sides; otherwise left out
+   or drawn as unsure (goes with the fresh-snow rule in item 19).
+4. **Small inventory glaciers that may have vanished** (under 0.1 km²). The white share (NDSI > 0.4) of the
+   polygon is measured in the 10 October images (2016–2025, clear pixels only):
+   - white in fewer than half the years AND under 25 % white in the least-snow year → not glacier;
+   - white in 50–89 % → unsure;
+   - 90 % or more → stays.
+
+   Applied by script to whole polygons, not by eye. Applied so far: fid 95 and 121 removed (Kavya), fid 53, 57, 63, 82
+   and 84 unsure (Krisha). *How the white share is counted is still open; see Open item 2.*
+5. **Spillway Lake** (7,4) stays unsure.
+- **Blind redraw:** Krisha redrew Kavya's 8 test squares (agreement IoU 0.967). Snehi's redraw of Krisha's 5 test
+  squares is optional and can be done after 21 Dec.
 
 
 ## Open – needs a team decision
 1. **Fresh-snow judgement for each year** (Snehi, scene log). For 2016–2021 it has to come from the
    SWIR previews, not from `snow_%_hint`.
+2. **Rule 4: how to count "white in X % of the years"** (item 20). A script check on 19 Nov of every small polygon
+   in both drawings gives the same answer either way for most of them, but not all:
+   - (a) the share of years in which at least half the polygon is white; or
+   - (b) the polygon's white share averaged over the 10 years.
+
+   Not covered yet under either way: fid 122 (10,12 test / 11,12; unsure), and in Krisha's squares fid 50 (8,2 test;
+   not glacier), fid 65 (10,2 test), 202 (5,7 val), 68 (10,3), 70 and 71 (8,5); all unsure except fid 50.
+   Only under (b): fid 58 (8,2/9,2 test, 86 %) and 244 (9,6 val, 79 %) would become unsure too.
