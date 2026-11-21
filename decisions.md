@@ -217,26 +217,27 @@ reopen any of them after 21 Dec. They apply to both labellers' squares.
 3. **White margins outside an outline.** Added only as a rock-free notch tip with glacier on 3 sides; otherwise left out
    or drawn as unsure (goes with the fresh-snow rule in item 19).
 4. **Small inventory glaciers that may have vanished** (under 0.1 km²). The white share (NDSI > 0.4) of the
-   polygon is measured in the 10 October images (2016–2025, clear pixels only):
+   polygon is measured in each of the 10 autumn images (2016–2025; 2024 and 2025 are November; clear pixels only).
+   A year counts as "white" when at least half the polygon's clear pixels are white. Then, by the share of white years:
    - white in fewer than half the years AND under 25 % white in the least-snow year → not glacier;
-   - white in 50–89 % → unsure;
+   - white in 50–89 % of the years → unsure;
    - 90 % or more → stays.
 
-   Applied by script to whole polygons, not by eye. Applied so far: fid 95 and 121 removed (Kavya), fid 53, 57, 63, 82
-   and 84 unsure (Krisha). *How the white share is counted is still open; see Open item 2.*
+   *Counting decided 2026-11-21 (Kavya, Krisha): share of white years, as above, not the white share averaged
+   over the years. This is how the rule was applied on 12 Nov. The two readings differ only for Krisha's fid 58 and
+   244, which stay as glacier.*
+
+   Applied by script to whole polygons, not by eye. Applied: fid 95 and 121 removed (Kavya); fid 64 and 249
+   removed, fid 53, 57, 63, 82 and 84 unsure (Krisha). Still to apply: fid 122 unsure (10,12/11,12; Kavya, with her
+   self-check upload); fid 50 removed (8,2), fid 65 (10,2), 202 (5,7), 68 (10,3), 70 and 71 (8,5) unsure (Krisha,
+   asked 21 Nov).
 5. **Spillway Lake** (7,4) stays unsure.
-- **Blind redraw:** Krisha redrew Kavya's 8 test squares (agreement IoU 0.967). Snehi's redraw of Krisha's 5 test
-  squares is optional and can be done after 21 Dec.
+- **Blind redraw:** Krisha redrew Kavya's 8 test squares (agreement IoU 0.967). Snehi is away and Kavya reviewed
+  Krisha's squares, so Krisha redraws her own 5 test squares (7,2 8,2 9,2 9,3 10,2) from the start file without
+  opening her drawing (asked 21 Nov). Because it is the same person, this measures repeat consistency, not
+  two-person agreement, and is reported separately from the 0.967.
 
 
 ## Open – needs a team decision
 1. **Fresh-snow judgement for each year** (Snehi, scene log). For 2016–2021 it has to come from the
    SWIR previews, not from `snow_%_hint`.
-2. **Rule 4: how to count "white in X % of the years"** (item 20). A script check on 19 Nov of every small polygon
-   in both drawings gives the same answer either way for most of them, but not all:
-   - (a) the share of years in which at least half the polygon is white; or
-   - (b) the polygon's white share averaged over the 10 years.
-
-   Not covered yet under either way: fid 122 (10,12 test / 11,12; unsure), and in Krisha's squares fid 50 (8,2 test;
-   not glacier), fid 65 (10,2 test), 202 (5,7 val), 68 (10,3), 70 and 71 (8,5); all unsure except fid 50.
-   Only under (b): fid 58 (8,2/9,2 test, 86 %) and 244 (9,6 val, 79 %) would become unsure too.
