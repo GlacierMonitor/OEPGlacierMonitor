@@ -232,6 +232,23 @@ reopen any of them after 21 Dec. They apply to both labellers' squares.
    self-check upload); fid 50 removed (8,2), fid 65 (10,2), 202 (5,7), 68 (10,3), 70 and 71 (8,5) unsure (Krisha,
    asked 21 Nov).
 5. **Spillway Lake** (7,4) stays unsure.
+6. **What the second TEST score ignores** (decided 2026-11-21 by Kavya, before any TEST scoring run). The headline
+   score is always the one as drawn. The masks are built by script with the same definitions on both labellers' test
+   squares. Pixels are 10 m. "White" means NDSI > 0.4 on 24 Oct 2022. "Always white" means white in at least 90 % of
+   the clear Octobers 2016–2025.
+   - **Rule 1, rebuilt.** Outside the label, connected pieces of white ground at 35° or more (at least 100 px, within
+     20 m of the outline) that are always white, or that are clear in fewer than 3 Octobers. The second case covers
+     shaded faces that were never seen clearly. The old set missed them because 0 clear years read as "never white".
+     The 35°-or-more part of fid 146 is added too. In Kavya's test squares this grows from 8.2 km² to 11.6 km².
+   - **Inside edge band.** Inside the label, steep always-white pixels within 20 m (2 px) of the outline and next to
+     the outside set are ignored too, so the second score is not one-sided at the line. 20 m is one SWIR pixel, and
+     NDSI depends on that band. Steep white ground deeper inside stays scored (icefalls; 16.3 km² in Kavya's test
+     squares, a third of the test glacier). Rule 1 decides where the line stops on a face. It does not put icefalls
+     in doubt. In Kavya's test squares the band adds 1.05 km², so 12.7 km² are ignored in total.
+   - **Rule 1b, its own score line.** Outside the label, gentle (under 35°) always-white pieces of 100–799 px that
+     touch the outline. These are margins that rule 3 does not add. They are reported as a separate line, not folded
+     into rule 1. Pieces of 800 px or more are drawn as unsure in the label instead. In Kavya's test squares:
+     0.41 km².
 - **Blind redraw:** Krisha redrew Kavya's 8 test squares (agreement IoU 0.967). Snehi is away and Kavya reviewed
   Krisha's squares, so Krisha redraws her own 5 test squares (7,2 8,2 9,2 9,3 10,2) from the start file without
   opening her drawing (asked 21 Nov). Because it is the same person, this measures repeat consistency, not
